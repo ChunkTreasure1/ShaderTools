@@ -49,6 +49,7 @@
   <ItemGroup>
     <Compile Include="Commands\ShaderCommands.cs" />
     <Compile Include="Editor\LspTextRange.cs" />
+    <Compile Include="Editor\ShaderNavigableSymbolSource.cs" />
     <Compile Include="Editor\ShaderClassificationTagger.cs" />
     <Compile Include="Editor\ShaderDiagnostics.cs" />
     <Compile Include="Editor\ShaderEditorEvents.cs" />
