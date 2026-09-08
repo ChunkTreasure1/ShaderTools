@@ -174,6 +174,11 @@ try {
     if ($null -eq $identity -or $identity.Id -ne 'ShaderTools.f373ca48-f553-49ee-a743-4470b600021b') {
         throw 'VSIX identity changed; existing installations would not receive this package as an update.'
     }
+    [xml]$sourceManifest = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'ShaderTools.VisualStudio\source.extension.vsixmanifest')
+    $expectedVersion = $sourceManifest.PackageManifest.Metadata.Identity.Version
+    if ($identity.Version -ne $expectedVersion) {
+        throw "VSIX version '$($identity.Version)' does not match source manifest version '$expectedVersion'. Rebuild the package."
+    }
     if ($null -eq $displayName -or $displayName.InnerText -ne 'Shader Tools for Visual Studio') {
         throw 'VSIX display name does not match the product name.'
     }
