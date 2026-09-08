@@ -12,6 +12,7 @@ using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Text.Tagging;
 using Microsoft.VisualStudio.Utilities;
 using Newtonsoft.Json.Linq;
+using ShaderTools.Core.Editor;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -74,9 +75,12 @@ namespace ShaderTools.VisualStudio.Editor
         private readonly IClassificationFormatMap formatMap;
         private string documentUri;
         private CancellationTokenSource refreshCancellation;
-        private IReadOnlyList<InlayHintData> hints = Array.Empty<InlayHintData>();
-        private int snapshotVersion = -1;
+        private readonly InlayHintCache cache = new InlayHintCache();
+        // WPF adornments belong to this view and are only accessed on its UI thread.
+        private readonly Dictionary<object, IntraTextAdornmentTag> adornments =
+            new Dictionary<object, IntraTextAdornmentTag>();
         private long generation;
+        private bool catalogLoaded;
         private bool disposed;
 
         internal ShaderInlayHintTagger(
@@ -91,9 +95,11 @@ namespace ShaderTools.VisualStudio.Editor
             this.ownerState = ownerState ?? throw new ArgumentNullException(nameof(ownerState));
             this.documentUri = documentUri;
             this.formatMap = formatMap ?? throw new ArgumentNullException(nameof(formatMap));
+            cache.Clear(buffer.CurrentSnapshot.Version.VersionNumber, buffer.CurrentSnapshot.GetText());
 
             buffer.Changed += OnBufferChanged;
             view.Closed += OnViewClosed;
+            formatMap.ClassificationFormatMappingChanged += OnFormatMappingChanged;
             ShaderClientReadiness.Register(this);
             ShaderOptionChanges.Register(this);
             ScheduleRefresh(DebounceMilliseconds);
@@ -110,37 +116,42 @@ namespace ShaderTools.VisualStudio.Editor
             }
 
             var snapshot = spans[0].Snapshot;
-            IReadOnlyList<InlayHintData> current;
+            IReadOnlyList<ParameterHint> current;
             lock (gate)
             {
-                if (disposed || snapshotVersion != snapshot.Version.VersionNumber)
+                if (disposed || cache.Version != snapshot.Version.VersionNumber)
                 {
                     yield break;
                 }
 
-                current = hints;
+                current = cache.Hints;
             }
 
+            PruneAdornments(current);
             foreach (var hint in current)
             {
-                if (!hint.TryGetPosition(snapshot, out var position) || !Contains(spans, position))
+                if (!TryGetPosition(hint, snapshot, out var position) || !Contains(spans, position))
                 {
                     continue;
                 }
 
-                var properties = formatMap.DefaultTextProperties;
-                var adornment = new TextBlock
+                if (!adornments.TryGetValue(hint.Identity, out var tag))
                 {
-                    Text = hint.Label,
-                    FontFamily = properties.Typeface.FontFamily,
-                    FontSize = properties.FontRenderingEmSize * 0.9,
-                    FontStyle = FontStyles.Italic,
-                    Foreground = properties.ForegroundBrush,
-                    Opacity = 0.65,
-                    Margin = new Thickness(hint.PaddingLeft ? 3 : 0, 0, hint.PaddingRight ? 3 : 0, 0),
-                    ToolTip = "Parameter name hint",
-                };
-                var tag = new IntraTextAdornmentTag(adornment, null, PositionAffinity.Successor);
+                    tag = new IntraTextAdornmentTag(new TextBlock
+                    {
+                        Text = hint.Label,
+                        FontStyle = FontStyles.Italic,
+                        Opacity = 0.65,
+                        Margin = new Thickness(hint.PaddingLeft ? 3 : 0, 0, hint.PaddingRight ? 3 : 0, 0),
+                        ToolTip = "Parameter name hint",
+                    }, null, PositionAffinity.Successor);
+                    adornments.Add(hint.Identity, tag);
+                }
+                var properties = formatMap.DefaultTextProperties;
+                var adornment = (TextBlock)tag.Adornment;
+                adornment.FontFamily = properties.Typeface.FontFamily;
+                adornment.FontSize = properties.FontRenderingEmSize * 0.9;
+                adornment.Foreground = properties.ForegroundBrush;
                 yield return new TagSpan<IntraTextAdornmentTag>(
                     new SnapshotSpan(snapshot, position, 0),
                     tag);
@@ -149,11 +160,13 @@ namespace ShaderTools.VisualStudio.Editor
 
         public void OnClientReadinessChanged()
         {
+            lock (gate) catalogLoaded = false;
             ScheduleRefresh(0);
         }
 
         public void OnShaderOptionsChanged()
         {
+            lock (gate) catalogLoaded = false;
             ScheduleRefresh(0);
         }
 
@@ -169,11 +182,39 @@ namespace ShaderTools.VisualStudio.Editor
                 documentUri = newUri;
             }
 
-            ScheduleRefresh(0);
+            ScheduleRefresh(0, clear: true);
         }
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
+            var edits = e.Changes.Select(change => new InlayHintEdit(
+                change.OldPosition, change.OldLength, change.NewText)).ToArray();
+            bool mapped;
+            IReadOnlyList<int> affectedLines;
+            lock (gate)
+            {
+                if (disposed) return;
+                mapped = cache.Version == e.Before.Version.VersionNumber;
+                affectedLines = cache.ApplyEdits(e.Before.Version.VersionNumber,
+                    e.After.Version.VersionNumber, edits, e.After.GetText());
+                // Include paths and defines can change the available function signatures.
+                if (e.Changes.Any(change =>
+                    e.Before.GetLineFromPosition(change.OldPosition).GetText().TrimStart().StartsWith("#") ||
+                    e.After.GetLineFromPosition(change.NewPosition).GetText().TrimStart().StartsWith("#") ||
+                    change.NewText.Contains("#") || change.OldText.Contains("#"))) catalogLoaded = false;
+            }
+
+            if (mapped)
+            {
+                var changedLines = e.Changes.SelectMany(change =>
+                {
+                    var first = e.After.GetLineFromPosition(change.NewPosition).LineNumber;
+                    var last = e.After.GetLineFromPosition(change.NewEnd).LineNumber;
+                    return Enumerable.Range(first, last - first + 1);
+                }).Concat(affectedLines).Distinct().ToArray();
+                RaiseTagsChanged(e.After, changedLines);
+            }
+            else RaiseTagsChanged();
             ScheduleRefresh(DebounceMilliseconds);
         }
 
@@ -182,7 +223,13 @@ namespace ShaderTools.VisualStudio.Editor
             Dispose();
         }
 
-        private void ScheduleRefresh(int delayMilliseconds)
+        private void OnFormatMappingChanged(object sender, EventArgs e)
+        {
+            // Cached adornments still need new font/color properties after a theme change.
+            RaiseTagsChanged();
+        }
+
+        private void ScheduleRefresh(int delayMilliseconds, bool clear = false)
         {
             CancellationTokenSource previousCancellation;
             CancellationTokenSource currentCancellation = null;
@@ -199,8 +246,11 @@ namespace ShaderTools.VisualStudio.Editor
 
                 previousCancellation = refreshCancellation;
                 refreshCancellation = null;
-                hints = Array.Empty<InlayHintData>();
-                snapshotVersion = buffer.CurrentSnapshot.Version.VersionNumber;
+                if (clear || !enabled)
+                {
+                    cache.Clear(buffer.CurrentSnapshot.Version.VersionNumber, buffer.CurrentSnapshot.GetText());
+                    catalogLoaded = false;
+                }
                 generation++;
 
                 if (enabled)
@@ -208,13 +258,12 @@ namespace ShaderTools.VisualStudio.Editor
                     currentCancellation = new CancellationTokenSource();
                     refreshCancellation = currentCancellation;
                     snapshot = buffer.CurrentSnapshot;
-                    snapshotVersion = snapshot.Version.VersionNumber;
                     requestGeneration = generation;
                 }
             }
 
             Cancel(previousCancellation);
-            RaiseTagsChanged();
+            if (clear || !enabled) RaiseTagsChanged();
             if (currentCancellation != null)
             {
                 _ = RefreshAsync(snapshot, requestGeneration, delayMilliseconds, currentCancellation);
@@ -235,6 +284,7 @@ namespace ShaderTools.VisualStudio.Editor
                 }
 
                 string requestUri;
+                bool loadCatalog;
                 lock (gate)
                 {
                     if (disposed || requestGeneration != generation)
@@ -243,6 +293,7 @@ namespace ShaderTools.VisualStudio.Editor
                     }
 
                     requestUri = documentUri;
+                    loadCatalog = !catalogLoaded;
                 }
 
                 if (string.IsNullOrEmpty(requestUri))
@@ -276,7 +327,25 @@ namespace ShaderTools.VisualStudio.Editor
                     cancellation.Token).ConfigureAwait(false);
 
                 cancellation.Token.ThrowIfCancellationRequested();
-                var parsedHints = ParseHints(response);
+                var parsedHints = ParseHints(response, snapshot);
+                IReadOnlyList<string> declarations = null;
+                if (loadCatalog)
+                {
+                    try
+                    {
+                        var completion = await client.RequestAsync("textDocument/completion", new JObject
+                        {
+                            ["textDocument"] = new JObject { ["uri"] = requestUri },
+                            ["position"] = new JObject { ["line"] = lastLine.LineNumber, ["character"] = lastLine.Length },
+                            ["context"] = new JObject { ["triggerKind"] = 1 },
+                        }, cancellation.Token).ConfigureAwait(false);
+                        declarations = InlayHintCache.ReadCompletionSignatures(completion);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception) { /* Existing hints remain usable without the optional catalog. */ }
+                }
+                cancellation.Token.ThrowIfCancellationRequested();
+                IReadOnlyList<int> changedLines;
                 lock (gate)
                 {
                     if (disposed ||
@@ -287,11 +356,15 @@ namespace ShaderTools.VisualStudio.Editor
                         return;
                     }
 
-                    hints = parsedHints;
-                    snapshotVersion = snapshot.Version.VersionNumber;
+                    if (declarations != null)
+                    {
+                        cache.SetExternalSignatures(declarations);
+                        catalogLoaded = true;
+                    }
+                    changedLines = cache.Replace(snapshot.Version.VersionNumber, parsedHints, snapshot.GetText());
                 }
 
-                RaiseTagsChanged();
+                RaiseTagsChanged(snapshot, changedLines);
             }
             catch (OperationCanceledException)
             {
@@ -317,19 +390,21 @@ namespace ShaderTools.VisualStudio.Editor
             }
         }
 
-        private static IReadOnlyList<InlayHintData> ParseHints(JToken response)
+        private static IReadOnlyList<ParameterHint> ParseHints(JToken response, ITextSnapshot snapshot)
         {
             var array = response as JArray ?? response?["result"] as JArray;
             if (array == null || array.Count == 0)
             {
-                return Array.Empty<InlayHintData>();
+                return Array.Empty<ParameterHint>();
             }
 
-            var result = new List<InlayHintData>(Math.Min(array.Count, MaximumHints));
+            var result = new List<ParameterHint>(Math.Min(array.Count, MaximumHints));
             foreach (var token in array.Take(MaximumHints))
             {
                 if (!(token is JObject item) ||
-                    !TryReadPosition(item["position"], out var position))
+                    !TryReadPosition(item["position"], out var position) ||
+                    position.Line >= snapshot.LineCount ||
+                    position.Character > snapshot.GetLineFromLineNumber(position.Line).Length)
                 {
                     continue;
                 }
@@ -351,8 +426,9 @@ namespace ShaderTools.VisualStudio.Editor
                     label = label.Substring(0, MaximumLabelCharacters - 1) + "…";
                 }
 
-                result.Add(new InlayHintData(
-                    position,
+                result.Add(new ParameterHint(
+                    position.Line,
+                    position.Character,
                     label,
                     item.Value<bool?>("paddingLeft") == true,
                     item.Value<bool?>("paddingRight") == true));
@@ -432,11 +508,43 @@ namespace ShaderTools.VisualStudio.Editor
 
                     handler = TagsChanged;
                     snapshot = buffer.CurrentSnapshot;
+                    PruneAdornments(cache.Hints);
                 }
 
                 handler?.Invoke(this, new SnapshotSpanEventArgs(
                     new SnapshotSpan(snapshot, 0, snapshot.Length)));
             });
+        }
+
+        private void RaiseTagsChanged(ITextSnapshot snapshot, IReadOnlyList<int> changedLines)
+        {
+            if (changedLines.Count == 0) return;
+            ShaderUiNotifications.Post(() =>
+            {
+                EventHandler<SnapshotSpanEventArgs> handler;
+                ITextSnapshot current;
+                lock (gate)
+                {
+                    if (disposed) return;
+                    handler = TagsChanged;
+                    current = buffer.CurrentSnapshot;
+                    PruneAdornments(cache.Hints);
+                }
+                foreach (var number in changedLines)
+                {
+                    if (number < 0 || number >= snapshot.LineCount) continue;
+                    var line = snapshot.GetLineFromLineNumber(number).ExtentIncludingLineBreak;
+                    handler?.Invoke(this, new SnapshotSpanEventArgs(
+                        line.TranslateTo(current, SpanTrackingMode.EdgeInclusive)));
+                }
+            });
+        }
+
+        private void PruneAdornments(IReadOnlyList<ParameterHint> current)
+        {
+            var identities = new HashSet<object>(current.Select(hint => hint.Identity));
+            foreach (var identity in adornments.Keys.Where(key => !identities.Contains(key)).ToArray())
+                adornments.Remove(identity);
         }
 
         public void Dispose()
@@ -453,15 +561,17 @@ namespace ShaderTools.VisualStudio.Editor
                 generation++;
                 cancellation = refreshCancellation;
                 refreshCancellation = null;
-                hints = Array.Empty<InlayHintData>();
+                cache.Clear(buffer.CurrentSnapshot.Version.VersionNumber);
             }
 
             buffer.Changed -= OnBufferChanged;
             view.Closed -= OnViewClosed;
+            formatMap.ClassificationFormatMappingChanged -= OnFormatMappingChanged;
             ShaderClientReadiness.Unregister(this);
             ShaderOptionChanges.Unregister(this);
             ownerState.UnregisterUriListener(this);
             Cancel(cancellation);
+            ShaderUiNotifications.Post(() => adornments.Clear());
         }
 
         private static void Cancel(CancellationTokenSource cancellation)
@@ -476,45 +586,14 @@ namespace ShaderTools.VisualStudio.Editor
             }
         }
 
-        private readonly struct InlayHintData
+        private static bool TryGetPosition(ParameterHint hint, ITextSnapshot snapshot, out int position)
         {
-            internal InlayHintData(
-                LspTextPosition position,
-                string label,
-                bool paddingLeft,
-                bool paddingRight)
-            {
-                Position = position;
-                Label = label;
-                PaddingLeft = paddingLeft;
-                PaddingRight = paddingRight;
-            }
-
-            internal LspTextPosition Position { get; }
-
-            internal string Label { get; }
-
-            internal bool PaddingLeft { get; }
-
-            internal bool PaddingRight { get; }
-
-            internal bool TryGetPosition(ITextSnapshot snapshot, out int position)
-            {
-                position = 0;
-                if (Position.Line < 0 || Position.Line >= snapshot.LineCount)
-                {
-                    return false;
-                }
-
-                var line = snapshot.GetLineFromLineNumber(Position.Line);
-                if (Position.Character < 0 || Position.Character > line.Length)
-                {
-                    return false;
-                }
-
-                position = line.Start.Position + Position.Character;
-                return true;
-            }
+            position = 0;
+            if (hint.Line >= snapshot.LineCount) return false;
+            var line = snapshot.GetLineFromLineNumber(hint.Line);
+            if (hint.Character > line.Length) return false;
+            position = line.Start.Position + hint.Character;
+            return true;
         }
     }
 }

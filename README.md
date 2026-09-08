@@ -24,6 +24,8 @@ If the older **GLSL language integration** extension is installed, disable it to
 
 Commands are under **Extensions > Shader Tools**. **Shader Explorer** lists variants and symbols. **Show server output** opens the log; **Restart language server** restarts analysis.
 
+Parameter hints update as you enter or delete individual arguments. Other argument hints stay visible, including in unfinished calls. The editor uses local declarations and cached completion signatures until the server responds. Ambiguous overloads wait for the server when their parameter names differ. Editing a local function's parameters also updates hints at its call sites.
+
 Common shortcuts, with the default VS key bindings:
 
 | Action | Shortcut |

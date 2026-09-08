@@ -813,6 +813,73 @@ async function main() {
     assert.ok(signature.signatures.some((item) => item.label.includes("computeLocal")), "local function signature missing");
   });
 
+  await runTest("parameter hints update call sites after signature edits and survive unfinished code", async () => {
+    const hintsPath = path.join(shaderDirectory, "parameter hints.frag.glsl");
+    const original = [
+      "#version 450",
+      "float scale(float amount) { return amount; }",
+      "void main() {",
+      "    float first = scale(1.0);",
+      "    float second = scale(2.0);",
+      "}",
+      "",
+    ].join("\n");
+    writeFileSync(hintsPath, original);
+    openDocument(hintsPath, "shader-tools-glsl", 1, original);
+    const uri = uriFor(hintsPath);
+    const readHints = async (text) => {
+      const lines = text.split("\n");
+      const hints = await connection.request("textDocument/inlayHint", {
+        textDocument: { uri },
+        range: { start: { line: 0, character: 0 }, end: { line: lines.length - 1, character: lines.at(-1).length } },
+      });
+      assert.ok(Array.isArray(hints), "expected an inlay hint response");
+      return hints.filter((hint) => hint.position.line === 3 || hint.position.line === 4)
+        .map((hint) => typeof hint.label === "string" ? hint.label : hint.label.map((part) => part.value).join(""));
+    };
+    assert.deepEqual(await readHints(original), ["amount:", "amount:"]);
+
+    const renamed = original.replaceAll("amount", "value");
+    connection.notify("textDocument/didChange", {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{
+        range: { start: { line: 1, character: 0 }, end: { line: 1, character: original.split("\n")[1].length } },
+        text: "float scale(float value) { return value; }",
+      }],
+    });
+    assert.deepEqual(await readHints(renamed), ["value:", "value:"]);
+
+    const unfinished = renamed.replace("\n}\n", "\n    float editing =\n}\n");
+    connection.notify("textDocument/didChange", {
+      textDocument: { uri, version: 3 },
+      contentChanges: [{ text: unfinished }],
+    });
+    assert.deepEqual(await readHints(unfinished), ["value:", "value:"]);
+    closeDocument(hintsPath);
+  });
+
+  await runTest("completion supplies parameter signatures while a call is still open", async () => {
+    const partialPath = path.join(shaderDirectory, "partial arguments.frag.glsl");
+    const text = "#version 450\nfloat custom(float first, int second) { return first; }\nvoid main() {\ncustom(3.3, 2\n}\n";
+    writeFileSync(partialPath, text);
+    openDocument(partialPath, "shader-tools-glsl", 1, text);
+    const response = await connection.request("textDocument/completion", {
+      textDocument: { uri: uriFor(partialPath) },
+      position: { line: text.split("\n").length - 1, character: 0 },
+      context: { triggerKind: 1 },
+    });
+    const items = completionItems(response);
+    const declaration = (name) => {
+      const documentation = items.find((item) => item.label === name)?.documentation;
+      const markdown = typeof documentation === "string" ? documentation : documentation?.value;
+      assert.ok(markdown?.startsWith("```"), `${name} has no fenced signature documentation`);
+      return markdown.slice(markdown.indexOf("\n") + 1, markdown.indexOf("```", 3));
+    };
+    assert.match(declaration("custom"), /custom\(float first, int second\)/);
+    assert.match(declaration("mix"), /mix\([^)]*\bx\b[^)]*\by\b[^)]*\ba\b/);
+    closeDocument(partialPath);
+  });
+
   await runTest("goto definition resolves a symbol declared in a configured include", async () => {
     const response = await connection.request("textDocument/definition", {
       textDocument: { uri: uriFor(featurePath) },

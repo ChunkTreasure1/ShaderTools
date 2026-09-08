@@ -51,7 +51,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-package.p
 
 The Node test uses the local server and bridge. The package test extracts the VSIX and checks its contents and server behavior, including include navigation, diagnostics, variants, formatting and shutdown.
 
-Checked with Windows PowerShell 5.1 and VS 2022 Developer PowerShell: **107 unit tests and 14 integration groups passed**. A source copy without `bin` or `obj` was also built successfully. NuGet packages and the toolchain were already installed.
+The build workflow has been checked with Windows PowerShell 5.1 and VS 2022 Developer PowerShell, including a source copy without `bin` or `obj`. NuGet packages and the toolchain were already installed. Tests cover individual argument edits, unfinished and nested calls, stable hint identities, signature changes and completion signatures from the actual server, alongside the other editor and protocol checks.
 
 ## Troubleshooting
 
@@ -79,6 +79,8 @@ For restore/download failures, check the first error and your package sources or
 Open the solution, set `ShaderTools.VisualStudio` as the startup project and press **F5** to use the experimental `Exp` instance. Close it before redeploying. For a Release installation, close VS and open the generated VSIX.
 
 Use `examples/BasicShaders` and `examples/Coloring` to check completion, navigation, diagnostics while typing, variants, settings reload, colors, folding and hints. Also test theme changes, Save As, multiple views and workspace changes.
+
+For argument hints, declare `float example(float first, int second);` and type `example(3.3, 2` in a function body. `first:` should appear when you enter `3`, and `second:` when you enter `2`, without waiting for `)`. Deleting `2` should remove only `second:`. This sequence, an empty argument with a closing parenthesis, and parameter renames at both call sites were checked in a separate VS 2022 test profile for 0.2.4. Unit tests also cover nested and multiline calls. Repeat these checks when changing hint handling.
 
 Automated tests do not cover the whole editor. The latest Ctrl+click handler still needs a live mouse test; earlier GLSL highlighting, folding and hints were checked in VS 2022. HLSL may use the separate HLSL Tools editor; see the BasicShaders README for its configuration.
 
