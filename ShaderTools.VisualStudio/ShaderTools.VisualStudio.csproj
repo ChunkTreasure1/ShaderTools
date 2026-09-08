@@ -57,6 +57,7 @@
     <Compile Include="Editor\ShaderFoldingTagger.cs" />
     <Compile Include="Editor\ShaderInactiveCodeFormat.cs" />
     <Compile Include="Editor\ShaderInactiveCodeTagger.cs" />
+    <Compile Include="Editor\ShaderInlayHintTagger.cs" />
     <Compile Include="ShaderToolsPackage.cs" />
     <Compile Include="LanguageClient\ShaderContentTypes.cs" />
     <Compile Include="LanguageClient\ShaderFilePathExports.cs" />
