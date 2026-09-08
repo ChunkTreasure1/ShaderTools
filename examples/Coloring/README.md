@@ -1,13 +1,14 @@
-# Проверка цветов GLSL
+# GLSL coloring sample
 
-Откройте эту папку в Visual Studio и сравните `shader.frag` и `shader.vert`.
-`FragColor`, `TexCoord`, `ourColor`, `aPos` и uniform-переменные должны иметь
-одинаковую категорию в объявлении и при использовании. `vec2`, `vec3`, `vec4`
-и `sampler2D` — типы; `main`, `mix`, `texture` — функции; `layout`, `in`,
-`out`, `uniform` — ключевые слова. `gl_Position` — встроенная глобальная переменная.
+Open this folder in Visual Studio and compare `shader.frag` and `shader.vert`.
+`FragColor`, `TexCoord`, `ourColor`, `aPos`, and uniform variables should use
+the same color category in declarations and references. `vec2`, `vec3`, `vec4`,
+and `sampler2D` are types; `main`, `mix`, and `texture` are functions; `layout`,
+`in`, `out`, and `uniform` are keywords. `gl_Position` is a built-in global variable.
 
-Цвета берутся из текущих настроек **Fonts and Colors** Visual Studio:
-при наличии Visual Assist — **VA Method**, **VA Variable**, **VA Class** и **VA Macro**;
-иначе — стандартные категории C++. Поэтому функции и данные должны выглядеть
-так же, как в C++ с соответствующей палитрой. Параметр **Shader Tools → Use C++ colors for shaders**
-включён по умолчанию; его можно отключить, чтобы вернуться к цветам TextMate.
+Colors come from Visual Studio's **Fonts and Colors** settings. If Visual Assist
+is available, the extension uses categories such as **VA Method**, **VA Variable**,
+**VA Class**, and **VA Macro**; otherwise, it uses standard C++ categories.
+Functions and variables should therefore follow your C++ color settings.
+**Shader Tools → Use C++ colors for shaders** is enabled by default.
+Turn it off to use TextMate colors instead.
