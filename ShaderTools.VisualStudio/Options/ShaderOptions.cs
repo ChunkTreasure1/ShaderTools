@@ -31,6 +31,8 @@ namespace ShaderTools.VisualStudio.Options
         public bool EnableWgsl { get; set; } = true;
         [Category("Editor"), DisplayName("Parameter name hints"), DefaultValue(true)]
         public bool EnableInlayHints { get; set; } = true;
+        [Category("Editor"), DisplayName("Format on save"), Description("Format GLSL and HLSL before saving, using clang-format and the document's .clang-format configuration."), DefaultValue(true)]
+        public bool FormatOnSave { get; set; } = true;
         [Category("Editor"), DisplayName("Fade inactive preprocessor branches"), DefaultValue(true)]
         public bool FadeInactiveCode { get; set; } = true;
         [Category("Editor"), DisplayName("Use C++ colors for shaders"), Description("Use Visual Assist colors when available, otherwise the current theme's C++ colors, for GLSL/HLSL declarations and references. Turn off to use TextMate colors."), DefaultValue(true)]
@@ -94,6 +96,7 @@ namespace ShaderTools.VisualStudio.Options
                 ["enableHlsl"] = EnableHlsl,
                 ["enableWgsl"] = EnableWgsl,
                 ["enableInlayHints"] = EnableInlayHints,
+                ["formatOnSave"] = FormatOnSave,
                 ["fadeInactiveCode"] = FadeInactiveCode,
                 ["useCppColors"] = UseCppColors,
                 ["validate"] = Validate,
@@ -146,6 +149,7 @@ namespace ShaderTools.VisualStudio.Options
                 result.EnableHlsl = (bool?)prefs["enableHlsl"] ?? true;
                 result.EnableWgsl = (bool?)prefs["enableWgsl"] ?? true;
                 result.EnableInlayHints = (bool?)prefs["enableInlayHints"] ?? true;
+                result.FormatOnSave = (bool?)prefs["formatOnSave"] ?? true;
                 result.FadeInactiveCode = (bool?)prefs["fadeInactiveCode"] ?? true;
                 result.UseCppColors = (bool?)prefs["useCppColors"] ?? true;
                 result.Validate = (bool?)prefs["validate"] ?? true;

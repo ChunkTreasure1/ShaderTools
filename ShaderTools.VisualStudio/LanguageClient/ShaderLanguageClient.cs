@@ -418,7 +418,7 @@ namespace ShaderTools.VisualStudio.LanguageClient
             });
         }
 
-        private static string FindFormatDirectory(string configured)
+        internal static string FindFormatDirectory(string configured)
         {
             if (!string.IsNullOrWhiteSpace(configured))
             {
