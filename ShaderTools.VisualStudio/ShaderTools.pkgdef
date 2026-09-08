@@ -1,0 +1,15 @@
+[$RootKey$\TextMate\Repositories]
+"ShaderTools"="$PackageFolder$\Grammars"
+
+// Map each TextMate grammar scope to the shared shader editor configuration.
+[$RootKey$\TextMate\LanguageConfiguration\GrammarMapping]
+"source.glsl"="$PackageFolder$\Grammars\shader-language-configuration.json"
+"source.hlsl"="$PackageFolder$\Grammars\shader-language-configuration.json"
+"source.wgsl"="$PackageFolder$\Grammars\shader-language-configuration.json"
+
+// These names match the extension's MEF content types. They deliberately do not
+// claim Visual Studio's built-in HLSL content type.
+[$RootKey$\TextMate\LanguageConfiguration\ContentTypeMapping]
+"shader-tools-glsl"="$PackageFolder$\Grammars\shader-language-configuration.json"
+"shader-tools-hlsl"="$PackageFolder$\Grammars\shader-language-configuration.json"
+"shader-tools-wgsl"="$PackageFolder$\Grammars\shader-language-configuration.json"

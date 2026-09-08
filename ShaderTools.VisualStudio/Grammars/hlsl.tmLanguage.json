@@ -1,0 +1,726 @@
+{
+    "name": "HLSL",
+    "scopeName": "source.hlsl",
+    "fileTypes": [ "hlsl", "hlsli", "fx", "fxh" ],
+    "author": ["antaalt"],
+    "_resources":[
+        "https://code.visualstudio.com/api/language-extensions/semantic-highlight-guide",
+        "https://macromates.com/manual/en/language_grammars#naming-conventions"
+    ],
+    "uuid": "75ae6133-98c4-45a5-ac1b-0c31e8af330c",
+    "patterns": [
+        {
+            "include": "#line_comments"
+        },
+        {
+            "include": "#block_comments"
+        },
+        {
+            "include": "#qualifiers"
+        },
+        {
+            "include": "#preprocessor"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#attributes"
+        },
+        {
+            "include": "#functions"
+        },
+        {
+            "include": "#function_calls"
+        },
+        {
+            "include": "#constants"
+        },
+        {
+            "include": "#variables"
+        },
+        {
+            "include": "#types"
+        },
+        {
+            "include": "#punctuation"
+        }
+    ],
+    "repository": {
+        "line_comments": {
+            "comment": "single line comment",
+            "name": "comment.line.double-slash.hlsl",
+            "match": "\\s*//.*"
+        },
+        "block_comments": {
+            "patterns": [
+                {
+                    "comment": "empty block comments",
+                    "name": "comment.block.hlsl",
+                    "match": "/\\*\\*/"
+                },
+                {
+                    "comment": "block documentation comments",
+                    "name": "comment.block.documentation.hlsl",
+                    "begin": "/\\*\\*",
+                    "end": "\\*/",
+                    "patterns": [
+                        {
+                            "include": "#block_comments"
+                        }
+                    ]
+                },
+                {
+                    "comment": "block comments",
+                    "name": "comment.block.hlsl",
+                    "begin": "/\\*(?!\\*)",
+                    "end": "\\*/",
+                    "patterns": [
+                        {
+                            "include": "#block_comments"
+                        }
+                    ]
+                }
+            ]
+        },
+        "attributes": {
+            "patterns": [
+                {
+                    "comment": "attribute declaration",
+                    "name": "constant.language.attribute.hlsl",
+                    "match": "\\[(?i:domain|earlydepthstencil|instance|maxtessfactor|numthreads|outputcontrolpoints|outputtopology|partitioning|patchconstantfunc|flatten|branch|loop|unroll|fastopt|allow_uav_condition|forcecase|call|clipplanes|maxvertexcount|noinline|unknown|rootsignature|raypayload|shader)(\\(.*\\))?\\]"
+                }
+            ]
+        },
+        "functions": {
+            "patterns": [
+                {
+                    "comment": "function definition",
+                    "name": "meta.function.definition.hlsl",
+                    "begin": "\\b(\\w+)(\\s*\\<\\s*(\\w+)\\s*\\>\\s*)?\\s+(\\w+)(?=[\\s]*\\()", 
+                    "beginCaptures": {
+                        "1": {
+                            "name": "entity.name.type.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#types"
+                                }
+                            ]
+                        },
+                        "3": {
+                            "name": "entity.name.type.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#types"
+                                }
+                            ]
+                        },
+                        "4": {
+                            "name": "entity.name.function.hlsl"
+                        },
+                        "6": {
+                            "name": "punctuation.brackets.round.hlsl"
+                        }
+                    },
+                    "end": "\\{",
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.brackets.curly.hlsl"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#preprocessor"
+                        },
+                        {
+                            "include": "#line_comments"
+                        },
+                        {
+                            "include": "#block_comments"
+                        },
+                        {
+                            "include": "#qualifiers"
+                        },
+                        {
+                            "include": "#keywords"
+                        },
+                        {
+                            "include": "#attributes"
+                        },
+                        {
+                            "include": "#function_calls"
+                        },
+                        {
+                            "include": "#constants"
+                        },
+                        {
+                            "include": "#types"
+                        },
+                        {
+                            "include": "#variables"
+                        },
+                        {
+                            "include": "#punctuation"
+                        }
+                    ]
+                }
+            ]
+        },
+        "function_calls": {
+            "patterns": [
+                {
+                    "comment": "function/method calls",
+                    "name": "meta.function.call.hlsl",
+                    "begin": "([a-zA-Z_][a-zA-Z0-9_]*)(\\s*\\<\\s*(\\w+)\\s*\\>)?(?=[\\s]*\\()",
+                    "beginCaptures": {
+                        "1": {
+                            "name": "entity.name.function.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#types"
+                                }
+                            ]
+                        },
+                        "3": {
+                            "name": "entity.name.function.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#types"
+                                }
+                            ]
+                        },
+                        "4": {
+                            "name": "punctuation.brackets.round.hlsl"
+                        }
+                    },
+                    "end": "\\)",
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.brackets.round.hlsl"
+                        }
+                    },
+                    "patterns": [
+                        {
+                            "include": "#preprocessor"
+                        },
+                        {
+                            "include": "#line_comments"
+                        },
+                        {
+                            "include": "#block_comments"
+                        },
+                        {
+                            "include": "#qualifiers"
+                        },
+                        {
+                            "include": "#keywords"
+                        },
+                        {
+                            "include": "#attributes"
+                        },
+                        {
+                            "include": "#function_calls"
+                        },
+                        {
+                            "include": "#constants"
+                        },
+                        {
+                            "include": "#types"
+                        },
+                        {
+                            "include": "#variables"
+                        },
+                        {
+                            "include": "#punctuation"
+                        }
+                    ]
+                }
+            ]
+        },
+        "constants": {
+            "patterns": [
+                {
+                    "comment": "decimal float literal",
+                    "name": "constant.numeric.float.hlsl",
+                    "match": "(-?\\b[0-9][0-9]*\\.[0-9]*)([eE][+-]?[0-9]+)?((?i:[fhl]))?\\b",
+                    "captures": {
+                        "1": {
+                            "name": "constant.numeric.float.hlsl"
+                        },
+                        "2": {
+                            "name": "constant.language.attribute.hlsl entity.name.tag"
+                        },
+                        "3": {
+                            "name": "constant.language.attribute.hlsl entity.name.tag"
+                        }
+                    }
+                },
+                {
+                    "comment": "decimal literal",
+                    "name": "constant.numeric.decimal.hlsl",
+                    "match": "(-?\\b((0x)[0-9a-fA-F]+|(0)[0-9]+|[0-9]+))([ul]+)?\\b",
+                    "captures": {
+                        "1": {
+                            "name": "constant.numeric.decimal.hlsl"
+                        },
+                        "2": {
+                            "name": "constant.numeric.decimal.hlsl"
+                        },
+                        "3": {
+                            "name": "constant.language.attribute.hlsl entity.name.tag"
+                        },
+                        "4": {
+                            "name": "constant.language.attribute.hlsl entity.name.tag"
+                        },
+                        "5": {
+                            "name": "constant.language.attribute.hlsl entity.name.tag"
+                        }
+                    }
+                },
+                {
+                    "comment": "boolean constant",
+                    "name": "constant.language.boolean.hlsl",
+                    "match": "\\b(true|false)\\b"
+                },
+                {
+                    "name": "constant.language.boolean.hlsl",
+                    "match": "\\b(FALSE|TRUE|NULL)\\b"
+                },
+                {
+                    "comment": "hlsl semantic",
+                    "name": "constant.language.hlsl",
+                    "match": "(?<=\\:\\s|\\:)(?i:BINORMAL[0-9]*|BLENDINDICES[0-9]*|BLENDWEIGHT[0-9]*|COLOR[0-9]*|NORMAL[0-9]*|POSITIONT|POSITION[0-9]*|PSIZE[0-9]*|TANGENT[0-9]*|TEXCOORD[0-9]*|FOG|TESSFACTOR[0-9]*|VFACE|VPOS|DEPTH[0-9]*)\\b"
+                },
+                {
+                    "comment": "hlsl semantic shader model 4.0",
+                    "name": "constant.language.sm4.hlsl",
+                    "match": "\\b(?<=\\:\\s|\\:)(?i:SV_ClipDistance[0-9]*|SV_CullDistance[0-9]*|SV_Coverage|SV_Depth|SV_DepthGreaterEqual[0-9]*|SV_DepthLessEqual[0-9]*|SV_InstanceID|SV_IsFrontFace|SV_Position|SV_RenderTargetArrayIndex|SV_SampleIndex|SV_StencilRef|SV_Target[0-7]?|SV_VertexID|SV_ViewportArrayIndex)\\b"
+                },
+                {
+                    "comment": "hlsl semantic shader model 5.0",
+                    "name": "constant.language.sm5.hlsl",
+                    "match": "(?<=\\:\\s|\\:)(?i:SV_DispatchThreadID|SV_DomainLocation|SV_GroupID|SV_GroupIndex|SV_GroupThreadID|SV_GSInstanceID|SV_InsideTessFactor|SV_OutputControlPointID|SV_TessFactor)\\b"
+                },
+                {
+                    "comment": "hlsl semantic shader model 5.1",
+                    "name": "constant.language.sm51.hlsl",
+                    "match": "(?<=\\:\\s|\\:)(?i:SV_InnerCoverage|SV_StencilRef)\\b"
+                },
+                {
+                    "comment": "string constant",
+                    "name": "string.quoted.double.hlsl",
+                    "begin": "[']",
+                    "end": "[']",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.hlsl",
+                            "match": "\\\\."
+                        }
+                    ]
+                },
+                {
+                    "comment": "string constant",
+                    "name": "string.quoted.double.hlsl",
+                    "begin": "[\"]",
+                    "end": "[\"]",
+                    "patterns": [
+                        {
+                            "name": "constant.character.escape.hlsl",
+                            "match": "\\\\."
+                        }
+                    ]
+                }
+            ]
+        },
+        "types": {
+            "comment": "types",
+            "name": "storage.type.hlsl",
+            "patterns": [
+                {
+                    "comment": "scalar Types",
+                    "name": "storage.type.hlsl",
+                    "match": "\\b(bool|int|uint|dword|half|float|double)\\b"
+                },
+                {
+                    "comment": "minimum precision scalar Types",
+                    "name": "storage.type.hlsl",
+                    "match": "\\b(min16float|min10float|min16int|min12int|min16uint)\\b"
+                },
+                {
+                    "comment": "scalar Types 6.0",
+                    "name": "storage.type.sm60.hlsl",
+                    "match": "\\b(uint64_t|int64_t|uint32_t|int32_t)\\b"
+                },
+                {
+                    "comment": "scalar Types 6.2",
+                    "name": "storage.type.sm62.hlsl",
+                    "match": "\\b(float16_t|uint16_t|int16_t|float32_t|float64_t)\\b"
+                },
+                {
+                    "comment": "vector/matrix types",
+                    "name": "storage.type.hlsl",
+                    "match": "\\b(matrix|vector|(bool|int|uint|half|float|double|dword)[1-4](x[1-4])?)\\b"
+                },
+                {
+                    "comment": "vector/matrix types",
+                    "name": "storage.type.hlsl",
+                    "match": "\\b((min12int|min16float|min16int|min16uint|float16_t|float32_t|float64_t|uint16_t|int16_t|uint32_t|int32_t|uint64_t|int64_t)[1-4](x[1-4])?)\\b"
+                },
+                {
+                    "comment": "string type",
+                    "name": "storage.type.hlsl",
+                    "match": "\\b(string)\\b"
+                },
+                {
+                    "comment": "read hlsl type",
+                    "name": "storage.type.object.hlsl",
+                    "match": "\\b(AppendStructuredBuffer|Buffer|StructuredBuffer|ByteAddressBuffer|ConstantBuffer|TextureBuffer|ConsumeStructuredBuffer|InputPatch|OutputPatch|FeedbackTexture2D|FeedbackTexture2DArray)\\b"
+                },
+                {
+                    "comment": "rasterized order view type",
+                    "name": "storage.type.object.rasterizerordered.hlsl",
+                    "match": "\\b(RasterizerOrderedBuffer|RasterizerOrderedByteAddressBuffer|RasterizerOrderedStructuredBuffer|RasterizerOrderedTexture1D|RasterizerOrderedTexture1DArray|RasterizerOrderedTexture2D|RasterizerOrderedTexture2DArray|RasterizerOrderedTexture3D)\\b"
+                },
+                {
+                    "comment": "read write hlsl type",
+                    "name": "storage.type.object.rw.hlsl",
+                    "match": "\\b(RWBuffer|RWByteAddressBuffer|RWStructuredBuffer|RWTexture1D|RWTexture1DArray|RWTexture2D|RWTexture2DArray|RWTexture3D)\\b"
+                },
+                {
+                    "comment": "raytracing extension",
+                    "name": "storage.type.object.rw.hlsl",
+                    "match": "\\b(RayDesc|BuiltInTriangleIntersectionAttributes|RaytracingAccelerationStructure|GlobalRootSignature)\\b"
+                },
+                {
+                    "comment": "geometry stream type",
+                    "name": "storage.type.object.geometryshader.hlsl",
+                    "match": "\\b(LineStream|PointStream|TriangleStream)\\b"
+                },
+                {
+                    "comment": "legacy sampler type",
+                    "name": "storage.type.sampler.legacy.hlsl",
+                    "match": "\\b(sampler|sampler1D|sampler2D|sampler3D|samplerCUBE|sampler_state)\\b"
+                },
+                {
+                    "comment": "sampler type",
+                    "name": "storage.type.sampler.hlsl",
+                    "match": "\\b(SamplerState|SamplerComparisonState)\\b"
+                },
+                {
+                    "comment": "legacy texture type",
+                    "name": "storage.type.texture.legacy.hlsl",
+                    "match": "\\b(texture2D|textureCUBE)\\b"
+                },
+                {
+                    "comment": "texture type",
+                    "name": "storage.type.texture.hlsl",
+                    "match": "\\b(Texture1D|Texture1DArray|Texture2D|Texture2DArray|Texture2DMS|Texture2DMSArray|Texture3D|TextureCube|TextureCubeArray)\\b"
+                },
+                {
+                    "comment": "blending type",
+                    "name": "storage.type.hlsl",
+                    "match": "\\b(BlendState|DepthStencilState|RasterizerState)\\b"
+                },
+                {
+                    "comment": "technique type",
+                    "name": "storage.type.fx.technique.hlsl",
+                    "match": "\\b(technique|Technique|technique10|technique11|pass)\\b"
+                }
+            ]
+        },
+        "variables": {
+            "patterns": [
+                {
+                    "comment": "struct declaration",
+                    "name": "keyword.declaration.struct.hlsl",
+                    "match": "\\b(struct|class|interface|cbuffer|tbuffer|enum class|enum)\\s+(\\[[a-z]+\\]\\s+)?([a-zA-Z][a-zA-Z0-9_]*)?(\\s+:\\s+[a-zA-Z][a-zA-Z0-9_]*)?",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.declaration.struct.hlsl"
+                        },
+                        "2": {
+                            "name": "constant.language.attribute.hlsl"
+                        },
+                        "3": {
+                            "name": "entity.name.type.hlsl"
+                        }
+                    }
+                },
+                {
+                    "comment": "variable declaration",
+                    "name": "meta.variable.declaration.hlsl",
+                    "match": "\\b((\\w+)\\s+)*(\\w+)(\\s*\\<\\s*((\\w+)[\\s\\,]?)+\\s*\\>)?\\s+(\\w+)\\b",
+                    "captures": {
+                        "2": {
+                            "name": "keyword.declaration.qualifier.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#qualifiers"
+                                }
+                            ]
+                        },
+                        "3": {
+                            "name": "entity.name.type.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#types"
+                                }
+                            ]
+                        },
+                        "5": {
+                            "name": "entity.name.type.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#types"
+                                }
+                            ]
+                        },
+                        "6": {
+                            "name": "variable.other.hlsl"
+                        }
+                    }
+                }
+            ]
+        },
+        "punctuation": {
+            "patterns": [
+                {
+                    "comment": "comma",
+                    "name": "punctuation.comma.hlsl",
+                    "match": ","
+                },
+                {
+                    "comment": "curly braces",
+                    "name": "punctuation.brackets.curly.hlsl",
+                    "match": "[{}]"
+                },
+                {
+                    "comment": "parentheses, round brackets",
+                    "name": "punctuation.brackets.round.hlsl",
+                    "match": "[()]"
+                },
+                {
+                    "comment": "semicolon",
+                    "name": "punctuation.semi.hlsl",
+                    "match": ";"
+                },
+                {
+                    "comment": "square brackets",
+                    "name": "punctuation.brackets.square.hlsl",
+                    "match": "[\\[\\]]"
+                },
+                {
+                    "comment": "angle brackets",
+                    "name": "punctuation.brackets.angle.hlsl",
+                    "match": "(?<![=-])[<>]"
+                }
+            ]
+        },
+        "qualifiers": {
+            "patterns": [
+                {
+                    "comment": "other qualifier",
+                    "name": "keyword.qualifier.hlsl",
+                    "match": "\\b(const|volatile|uniform|unorm|unsigned|signed)\\b"
+                },
+                {
+                    "comment": "type modifier for float",
+                    "name": "keyword.declaration.float.hlsl",
+                    "match": "\\b(snorm|unorm)\\b"
+                },
+                {
+                    "comment": "type modifier for interpolation",
+                    "name": "keyword.declaration.hlsl",
+                    "match": "\\b(centroid|linear|nointerpolation|noperspective|sample)\\b"
+                },
+                {
+                    "comment": "type modifier for geometry shader",
+                    "name": "keyword.declaration.hlsl",
+                    "match": "\\b(lineadj|line|point|triangle|triangleadj)\\b"
+                },
+                {
+                    "comment": "common qualifier",
+                    "name": "keyword.qualifier.hlsl",
+                    "match": "\\b(column_major|const|export|extern|globallycoherent|groupshared|inline|inout|in|out|precise|row_major|shared|static|uniform|volatile)\\b"
+                }
+            ]
+        },
+        "preprocessor": {
+            "patterns": [
+                {
+                    "comment": "preprocessor",
+                    "name": "keyword.preprocessor.hlsl",
+                    "match": "^\\s*#\\s*(if|elif|else|endif|ifdef|ifndef|undef|include|line|error|warning|pragma|INF)\\s+([\\w\\(\\)]+)?",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.other.preprocessor.hlsl"
+                        },
+                        "2": {
+                            "name": "variable.other.hlsl",
+                            "patterns": [
+                                {
+                                    "comment": "defined macro",
+                                    "match": "(defined)\\(\\w+\\)",
+                                    "captures": {
+                                        "1": {
+                                            "name": "entity.name.function"
+                                        }
+                                    }
+                                },
+                                {
+                                    "include": "#line_comments"
+                                },
+                                {
+                                    "include": "#block_comments"
+                                },
+                                {
+                                    "include": "#keywords"
+                                },
+                                {
+                                    "include": "#attributes"
+                                },
+                                {
+                                    "include": "#function_calls"
+                                },
+                                {
+                                    "include": "#constants"
+                                },
+                                {
+                                    "include": "#types"
+                                },
+                                {
+                                    "include": "#variables"
+                                },
+                                {
+                                    "include": "#punctuation"
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "comment": "define preprocessor",
+                    "name": "keyword.preprocessor.hlsl",
+                    "match": "^\\s*#\\s*(define)\\s+(\\w+)(\\s*\\(\\s*[\\w\\,\\s]+\\s*\\))?\\s+(.*)?",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.preprocessor.hlsl"
+                        },
+                        "2": {
+                            "name": "entity.name.function.preprocessor.hlsl"
+                        },
+                        "3": {
+                            "name": "variable.other.hlsl"
+                        },
+                        "4": {
+                            "name": "variable.other.hlsl",
+                            "patterns": [
+                                {
+                                    "include": "#line_comments"
+                                },
+                                {
+                                    "include": "#block_comments"
+                                },
+                                {
+                                    "include": "#keywords"
+                                },
+                                {
+                                    "include": "#attributes"
+                                },
+                                {
+                                    "include": "#function_calls"
+                                },
+                                {
+                                    "include": "#constants"
+                                },
+                                {
+                                    "include": "#types"
+                                },
+                                {
+                                    "include": "#variables"
+                                },
+                                {
+                                    "include": "#punctuation"
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "comment": "other keywords",
+                    "name": "keyword.control.hlsl",
+                    "match": "\\b(goto|void|break|typedef|using|case|continue|default|discard|else|export|do|for|function|if|private|return|switch|while|workgroup|operator)\\b"
+                },
+                {
+                    "comment": "reserved keywords",
+                    "name": "keyword.control.hlsl",
+                    "match": "\\b(try|catch|do|new|long|typeid|public|__imag|__real)\\b"
+                },
+                {
+                    "comment": "type keyword",
+                    "name": "keyword.declaration.type.hlsl",
+                    "match": "\\b(typename|template|namespace)\\b"
+                },
+                {
+                    "comment": "logical operators",
+                    "name": "keyword.operator.logical.hlsl",
+                    "match": "(\\^|\\||\\|\\||&&|<<|>>|!|~|\\*)(?!=)"
+                },
+                {
+                    "comment": "logical AND, borrow references",
+                    "name": "keyword.operator.borrow.and.hlsl",
+                    "match": "&(?![&=])"
+                },
+                {
+                    "comment": "assignment operators",
+                    "name": "keyword.operator.assignment.hlsl",
+                    "match": "(\\+=|-=|\\*=|/=|%=|\\^=|&=|\\|=|<<=|>>=)"
+                },
+                {
+                    "comment": "single equal",
+                    "name": "keyword.operator.assignment.equal.hlsl",
+                    "match": "(?<![<>])=(?!=|>)"
+                },
+                {
+                    "comment": "comparison operators",
+                    "name": "keyword.operator.comparison.hlsl",
+                    "match": "(=(=)?(?!>)|!=|<=|(?<!=)>=|>|<)"
+                },
+                {
+                    "comment": "math operators",
+                    "name": "keyword.operator.math.hlsl",
+                    "match": "(([+%]|(\\*(?!\\w)))(?!=))|(-(?!>))|(/(?!/))"
+                },
+                {
+                    "comment": "dot access",
+                    "name": "keyword.operator.access.dot.hlsl",
+                    "match": "\\.(?!\\.)"
+                },
+                {
+                    "comment": "namespace access",
+                    "name": "keyword.operator.access.colon.hlsl",
+                    "match": "\\::(?!\\:)"
+                },
+                {
+                    "comment": "dashrocket, skinny arrow",
+                    "name": "keyword.operator.arrow.skinny.hlsl",
+                    "match": "->"
+                },
+                {
+                    "comment": "compiler operator",
+                    "name": "keyword.declaration.hlsl",
+                    "match": "\\b(sizeof|offsetof|static_assert|decltype|__decltype|_Static_assert)\\b"
+                },
+                {
+                    "comment": "type modifier for storage",
+                    "name": "keyword.declaration.hlsl",
+                    "match": "\\b(packoffset|register)\\b"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+  <Commands package="guidShaderPackage">
+    <Groups>
+      <Group guid="guidShaderCommands" id="MainGroup" priority="0x0800"><Parent guid="guidShaderMainMenu" id="ExtensionsMenu" /></Group>
+      <Group guid="guidShaderCommands" id="ActionsGroup" priority="0x0100"><Parent guid="guidShaderCommands" id="ShaderMenu" /></Group>
+    </Groups>
+    <Menus>
+      <Menu guid="guidShaderCommands" id="ShaderMenu" priority="0x0100" type="Menu"><Parent guid="guidShaderCommands" id="MainGroup" /><Strings><ButtonText>Shader Tools</ButtonText></Strings></Menu>
+    </Menus>
+    <Buttons>
+      <Button guid="guidShaderCommands" id="ShowWindow" priority="0x0100" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Shader Explorer</ButtonText></Strings></Button>
+      <Button guid="guidShaderCommands" id="EditConfiguration" priority="0x0200" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Project settings</ButtonText></Strings></Button>
+      <Button guid="guidShaderCommands" id="EditVariants" priority="0x0300" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Edit shader variants</ButtonText></Strings></Button>
+      <Button guid="guidShaderCommands" id="Validate" priority="0x0400" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Validate active shader</ButtonText></Strings></Button>
+      <Button guid="guidShaderCommands" id="Restart" priority="0x0500" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Restart language server</ButtonText></Strings></Button>
+      <Button guid="guidShaderCommands" id="ShowOutput" priority="0x0600" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Show server output</ButtonText></Strings></Button>
+      <Button guid="guidShaderCommands" id="ShowOptions" priority="0x0700" type="Button"><Parent guid="guidShaderCommands" id="ActionsGroup" /><Strings><ButtonText>Options…</ButtonText></Strings></Button>
+    </Buttons>
+  </Commands>
+  <Symbols>
+    <GuidSymbol name="guidShaderMainMenu" value="{D309F791-903F-11D0-9EFC-00A0C911004F}"><IDSymbol name="ExtensionsMenu" value="0x0091" /></GuidSymbol>
+    <GuidSymbol name="guidShaderPackage" value="{ffe86866-e88b-483c-ba23-3346fff7bde5}" />
+    <GuidSymbol name="guidShaderCommands" value="{74156DDE-8CA2-4A51-ACCA-94C52A6DB371}">
+      <IDSymbol name="MainGroup" value="0x1020" /><IDSymbol name="ActionsGroup" value="0x1021" /><IDSymbol name="ShaderMenu" value="0x1030" />
+      <IDSymbol name="ShowWindow" value="0x0100" /><IDSymbol name="Restart" value="0x0101" /><IDSymbol name="ShowOutput" value="0x0102" />
+      <IDSymbol name="EditConfiguration" value="0x0103" /><IDSymbol name="EditVariants" value="0x0104" /><IDSymbol name="Validate" value="0x0105" /><IDSymbol name="ShowOptions" value="0x0106" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>
