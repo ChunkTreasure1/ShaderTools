@@ -1,8 +1,8 @@
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Threading;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Threading;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -44,7 +44,7 @@ namespace ShaderTools.VisualStudio.Editor
     {
         private static readonly object Gate = new object();
         private static readonly List<WeakReference<IShaderOptionsListener>> Listeners =
-            new List<WeakReference<IShaderOptionsListener>>();
+            [];
 
         static ShaderOptionChanges()
         {
@@ -81,12 +81,12 @@ namespace ShaderTools.VisualStudio.Editor
                 RemoveDeadOr(null);
                 live = Listeners.Select(reference =>
                 {
-                    reference.TryGetTarget(out var target);
+                    _=reference.TryGetTarget(out IShaderOptionsListener target);
                     return target;
                 }).Where(target => target != null).ToArray();
             }
 
-            foreach (var listener in live)
+            foreach (IShaderOptionsListener listener in live)
             {
                 listener.OnShaderOptionsChanged();
             }
@@ -94,9 +94,9 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static void RemoveDeadOr(IShaderOptionsListener listener)
         {
-            for (var index = Listeners.Count - 1; index >= 0; index--)
+            for (int index = Listeners.Count - 1; index >= 0; index--)
             {
-                if (!Listeners[index].TryGetTarget(out var target) || ReferenceEquals(target, listener))
+                if (!Listeners[index].TryGetTarget(out IShaderOptionsListener target) || ReferenceEquals(target, listener))
                 {
                     Listeners.RemoveAt(index);
                 }

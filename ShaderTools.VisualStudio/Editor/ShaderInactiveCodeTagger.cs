@@ -1,11 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.Composition;
-using System.Linq;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text.Tagging;
 using Microsoft.VisualStudio.Utilities;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.Linq;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -31,7 +31,7 @@ namespace ShaderTools.VisualStudio.Editor
                 return null;
             }
 
-            var tagger = manager.GetOrCreate(buffer).GetInactiveTagger();
+            ShaderInactiveCodeTagger tagger = manager.GetOrCreate(buffer).GetInactiveTagger();
             return tagger == null ? null : (ITagger<T>)(object)tagger;
         }
     }
@@ -74,7 +74,7 @@ namespace ShaderTools.VisualStudio.Editor
                 yield break;
             }
 
-            var snapshot = spans[0].Snapshot;
+            ITextSnapshot snapshot = spans[0].Snapshot;
             DiagnosticSet current;
             lock (gate)
             {
@@ -86,29 +86,29 @@ namespace ShaderTools.VisualStudio.Editor
                 current = diagnostics;
             }
 
-            var errorSpans = current.ErrorRanges
-                .Select(range => range.TryGetSpan(snapshot, out var span) ? (Span?)span : null)
+            Span[] errorSpans = current.ErrorRanges
+                .Select(range => range.TryGetSpan(snapshot, out Span span) ? (Span?)span : null)
                 .Where(span => span.HasValue)
                 .Select(span => span.Value)
                 .OrderBy(span => span.Start)
                 .ToArray();
 
-            var fragmentCount = 0;
-            foreach (var inactiveRange in current.InactiveRanges)
+            int fragmentCount = 0;
+            foreach (LspTextRange inactiveRange in current.InactiveRanges)
             {
-                if (!inactiveRange.TryGetSpan(snapshot, out var inactiveSpan))
+                if (!inactiveRange.TryGetSpan(snapshot, out Span inactiveSpan))
                 {
                     continue;
                 }
 
-                foreach (var fragment in ExcludeErrors(inactiveSpan, errorSpans))
+                foreach (Span fragment in ExcludeErrors(inactiveSpan, errorSpans))
                 {
                     if (fragmentCount++ >= MaximumFragments)
                     {
                         yield break;
                     }
 
-                    var snapshotSpan = new SnapshotSpan(snapshot, fragment);
+                    SnapshotSpan snapshotSpan = new SnapshotSpan(snapshot, fragment);
                     if (Intersects(spans, snapshotSpan))
                     {
                         yield return new TagSpan<ClassificationTag>(snapshotSpan, classificationTag);
@@ -194,8 +194,8 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static IEnumerable<Span> ExcludeErrors(Span inactiveSpan, IReadOnlyList<Span> errorSpans)
         {
-            var cursor = inactiveSpan.Start;
-            foreach (var errorSpan in errorSpans)
+            int cursor = inactiveSpan.Start;
+            foreach (Span errorSpan in errorSpans)
             {
                 if (errorSpan.End <= cursor)
                 {
@@ -227,7 +227,7 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static bool Intersects(NormalizedSnapshotSpanCollection requestedSpans, SnapshotSpan candidate)
         {
-            foreach (var requestedSpan in requestedSpans)
+            foreach (SnapshotSpan requestedSpan in requestedSpans)
             {
                 if (requestedSpan.IntersectsWith(candidate))
                 {

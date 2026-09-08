@@ -1,6 +1,6 @@
+using Microsoft.VisualStudio.Shell;
 using System;
 using System.Runtime.InteropServices;
-using Microsoft.VisualStudio.Shell;
 
 namespace ShaderTools.VisualStudio.ToolWindows
 {
@@ -14,7 +14,11 @@ namespace ShaderTools.VisualStudio.ToolWindows
         }
         protected override void Dispose(bool disposing)
         {
-            if (disposing && Content is IDisposable disposable) disposable.Dispose();
+            if (disposing && Content is IDisposable disposable)
+            {
+                disposable.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }

@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 
 namespace ShaderTools.Core.Configuration;
 
@@ -39,8 +39,8 @@ public sealed class ShaderVariant
 
     public JObject ToProtocol()
     {
-        var defines = new JObject();
-        foreach (var pair in Defines)
+        JObject defines = [];
+        foreach (KeyValuePair<string, string> pair in Defines)
         {
             defines[pair.Key] = pair.Value;
         }

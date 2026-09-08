@@ -1,13 +1,13 @@
+using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Text.Tagging;
+using Microsoft.VisualStudio.Utilities;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.Text;
-using Microsoft.VisualStudio.Text.Tagging;
-using Microsoft.VisualStudio.Utilities;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -33,7 +33,7 @@ namespace ShaderTools.VisualStudio.Editor
                 return null;
             }
 
-            var tagger = manager.GetOrCreate(buffer).GetFoldingTagger();
+            ShaderFoldingTagger tagger = manager.GetOrCreate(buffer).GetFoldingTagger();
             return tagger == null ? null : (ITagger<T>)(object)tagger;
         }
     }
@@ -74,7 +74,7 @@ namespace ShaderTools.VisualStudio.Editor
                 yield break;
             }
 
-            var snapshot = spans[0].Snapshot;
+            ITextSnapshot snapshot = spans[0].Snapshot;
             IReadOnlyList<FoldingRegion> currentRegions;
             lock (gate)
             {
@@ -86,16 +86,16 @@ namespace ShaderTools.VisualStudio.Editor
                 currentRegions = regions;
             }
 
-            foreach (var region in currentRegions)
+            foreach (FoldingRegion region in currentRegions)
             {
-                if (!region.TryGetSpan(snapshot, out var span) || !Intersects(spans, span))
+                if (!region.TryGetSpan(snapshot, out SnapshotSpan span) || !Intersects(spans, span))
                 {
                     continue;
                 }
 
-                var hintLength = Math.Min(span.Length, MaximumHintCharacters);
-                var hint = hintLength > 0 ? snapshot.GetText(span.Start, hintLength) : region.CollapsedText;
-                var tag = new OutliningRegionTag(
+                int hintLength = Math.Min(span.Length, MaximumHintCharacters);
+                string hint = hintLength > 0 ? snapshot.GetText(span.Start, hintLength) : region.CollapsedText;
+                OutliningRegionTag tag = new OutliningRegionTag(
                     isDefaultCollapsed: false,
                     isImplementation: false,
                     collapsedForm: region.CollapsedText,
@@ -186,23 +186,23 @@ namespace ShaderTools.VisualStudio.Editor
                     return;
                 }
 
-                var client = LanguageClient.ShaderLanguageClient.Instance;
+                LanguageClient.ShaderLanguageClient client = LanguageClient.ShaderLanguageClient.Instance;
                 if (client == null || !client.IsReady)
                 {
                     return;
                 }
 
-                var parameters = new JObject
+                JObject parameters = new JObject
                 {
                     ["textDocument"] = new JObject { ["uri"] = requestUri },
                 };
-                var response = await client.RequestAsync(
+                JToken response = await client.RequestAsync(
                     "textDocument/foldingRange",
                     parameters,
                     cancellation.Token).ConfigureAwait(false);
 
                 cancellation.Token.ThrowIfCancellationRequested();
-                var parsedRegions = ParseRegions(response);
+                IReadOnlyList<FoldingRegion> parsedRegions = ParseRegions(response);
 
                 lock (gate)
                 {
@@ -246,26 +246,26 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static IReadOnlyList<FoldingRegion> ParseRegions(JToken response)
         {
-            var array = response as JArray ?? response?["result"] as JArray;
+            JArray array = response as JArray ?? response?["result"] as JArray;
             if (array == null || array.Count == 0)
             {
                 return Array.Empty<FoldingRegion>();
             }
 
-            var result = new List<FoldingRegion>(Math.Min(array.Count, MaximumRanges));
-            foreach (var token in array.Take(MaximumRanges))
+            List<FoldingRegion> result = new List<FoldingRegion>(Math.Min(array.Count, MaximumRanges));
+            foreach (JToken token in array.Take(MaximumRanges))
             {
-                if (!(token is JObject item) ||
-                    !LspTextRange.TryReadNonNegativeInt(item["startLine"], out var startLine) ||
-                    !LspTextRange.TryReadNonNegativeInt(item["endLine"], out var endLine) ||
+                if (token is not JObject item ||
+                    !LspTextRange.TryReadNonNegativeInt(item["startLine"], out int startLine) ||
+                    !LspTextRange.TryReadNonNegativeInt(item["endLine"], out int endLine) ||
                     endLine <= startLine)
                 {
                     continue;
                 }
 
-                var startCharacter = ReadOptionalCharacter(item["startCharacter"], 0);
-                var endCharacter = ReadOptionalCharacter(item["endCharacter"], int.MaxValue);
-                var collapsedText = item.Value<string>("collapsedText");
+                int startCharacter = ReadOptionalCharacter(item["startCharacter"], 0);
+                int endCharacter = ReadOptionalCharacter(item["endCharacter"], int.MaxValue);
+                string collapsedText = item.Value<string>("collapsedText");
                 result.Add(new FoldingRegion(
                     startLine,
                     startCharacter,
@@ -279,12 +279,12 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static int ReadOptionalCharacter(JToken token, int fallback)
         {
-            return LspTextRange.TryReadNonNegativeInt(token, out var value) ? value : fallback;
+            return LspTextRange.TryReadNonNegativeInt(token, out int value) ? value : fallback;
         }
 
         private static bool Intersects(NormalizedSnapshotSpanCollection requestedSpans, SnapshotSpan candidate)
         {
-            foreach (var requestedSpan in requestedSpans)
+            foreach (SnapshotSpan requestedSpan in requestedSpans)
             {
                 if (requestedSpan.IntersectsWith(candidate))
                 {
@@ -384,14 +384,14 @@ namespace ShaderTools.VisualStudio.Editor
                     return false;
                 }
 
-                var startLine = snapshot.GetLineFromLineNumber(StartLine);
-                var endLine = snapshot.GetLineFromLineNumber(EndLine);
-                var startCharacter = Math.Min(StartCharacter, startLine.Length);
-                var endCharacter = EndCharacter == int.MaxValue
+                ITextSnapshotLine startLine = snapshot.GetLineFromLineNumber(StartLine);
+                ITextSnapshotLine endLine = snapshot.GetLineFromLineNumber(EndLine);
+                int startCharacter = Math.Min(StartCharacter, startLine.Length);
+                int endCharacter = EndCharacter == int.MaxValue
                     ? endLine.Length
                     : Math.Min(EndCharacter, endLine.Length);
-                var start = startLine.Start.Position + startCharacter;
-                var end = endLine.Start.Position + endCharacter;
+                int start = startLine.Start.Position + startCharacter;
+                int end = endLine.Start.Position + endCharacter;
                 if (end <= start)
                 {
                     return false;
@@ -407,7 +407,7 @@ namespace ShaderTools.VisualStudio.Editor
     {
         private static readonly object Gate = new object();
         private static readonly List<WeakReference<IShaderClientReadinessListener>> Listeners =
-            new List<WeakReference<IShaderClientReadinessListener>>();
+            [];
 
         static ShaderClientReadiness()
         {
@@ -427,9 +427,9 @@ namespace ShaderTools.VisualStudio.Editor
         {
             lock (Gate)
             {
-                for (var index = Listeners.Count - 1; index >= 0; index--)
+                for (int index = Listeners.Count - 1; index >= 0; index--)
                 {
-                    if (!Listeners[index].TryGetTarget(out var target) || ReferenceEquals(target, listener))
+                    if (!Listeners[index].TryGetTarget(out IShaderClientReadinessListener target) || ReferenceEquals(target, listener))
                     {
                         Listeners.RemoveAt(index);
                     }
@@ -446,14 +446,14 @@ namespace ShaderTools.VisualStudio.Editor
                 liveListeners = Listeners
                     .Select(reference =>
                     {
-                        reference.TryGetTarget(out var target);
+                        _=reference.TryGetTarget(out IShaderClientReadinessListener target);
                         return target;
                     })
                     .Where(listener => listener != null)
                     .ToArray();
             }
 
-            foreach (var listener in liveListeners)
+            foreach (IShaderClientReadinessListener listener in liveListeners)
             {
                 listener.OnClientReadinessChanged();
             }
@@ -461,7 +461,7 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static void Prune()
         {
-            for (var index = Listeners.Count - 1; index >= 0; index--)
+            for (int index = Listeners.Count - 1; index >= 0; index--)
             {
                 if (!Listeners[index].TryGetTarget(out _))
                 {

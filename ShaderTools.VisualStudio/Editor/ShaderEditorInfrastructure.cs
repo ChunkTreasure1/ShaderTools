@@ -1,11 +1,11 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.Composition;
-using System.Runtime.CompilerServices;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text.Editor;
 using Microsoft.VisualStudio.Utilities;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.Runtime.CompilerServices;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -43,7 +43,7 @@ namespace ShaderTools.VisualStudio.Editor
             }
 
             ShaderEditorBufferState state;
-            var created = false;
+            bool created = false;
             lock (gate)
             {
                 if (!states.TryGetValue(buffer, out state))
@@ -56,7 +56,7 @@ namespace ShaderTools.VisualStudio.Editor
 
             // Re-query after publishing the state. This closes the race where the
             // document is created between an initial lookup and state registration.
-            if (created && documentFactory.TryGetTextDocument(buffer, out var document))
+            if (created && documentFactory.TryGetTextDocument(buffer, out ITextDocument document))
             {
                 state.AttachDocument(document);
             }
@@ -74,9 +74,9 @@ namespace ShaderTools.VisualStudio.Editor
             ShaderEditorBufferState state = null;
             lock (gate)
             {
-                if (states.TryGetValue(buffer, out var existing) && existing.Disconnect())
+                if (states.TryGetValue(buffer, out ShaderEditorBufferState existing) && existing.Disconnect())
                 {
-                    states.Remove(buffer);
+                    _=states.Remove(buffer);
                     state = existing;
                 }
             }
@@ -86,7 +86,7 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void OnTextDocumentCreated(object sender, TextDocumentEventArgs e)
         {
-            var document = e?.TextDocument;
+            ITextDocument document = e?.TextDocument;
             if (document == null)
             {
                 return;
@@ -95,7 +95,7 @@ namespace ShaderTools.VisualStudio.Editor
             ShaderEditorBufferState state;
             lock (gate)
             {
-                states.TryGetValue(document.TextBuffer, out state);
+                _=states.TryGetValue(document.TextBuffer, out state);
             }
 
             state?.AttachDocument(document);
@@ -103,7 +103,7 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void OnTextDocumentDisposed(object sender, TextDocumentEventArgs e)
         {
-            var document = e?.TextDocument;
+            ITextDocument document = e?.TextDocument;
             if (document == null)
             {
                 return;
@@ -112,7 +112,7 @@ namespace ShaderTools.VisualStudio.Editor
             ShaderEditorBufferState state;
             lock (gate)
             {
-                states.TryGetValue(document.TextBuffer, out state);
+                _=states.TryGetValue(document.TextBuffer, out state);
             }
 
             state?.DetachDocument(document);
@@ -125,7 +125,7 @@ namespace ShaderTools.VisualStudio.Editor
         private readonly ITextBuffer buffer;
         private readonly IClassificationType inactiveClassification;
         private readonly List<WeakReference<IShaderDocumentUriListener>> uriListeners =
-            new List<WeakReference<IShaderDocumentUriListener>>();
+            [];
         private ITextDocument document;
         private string documentUri;
         private ShaderFoldingTagger foldingTagger;
@@ -150,7 +150,7 @@ namespace ShaderTools.VisualStudio.Editor
                     return null;
                 }
 
-                return foldingTagger ?? (foldingTagger = new ShaderFoldingTagger(buffer, documentUri));
+                return foldingTagger ??= new ShaderFoldingTagger(buffer, documentUri);
             }
         }
 
@@ -255,8 +255,7 @@ namespace ShaderTools.VisualStudio.Editor
                     return null;
                 }
 
-                return inactiveTagger ??
-                    (inactiveTagger = new ShaderInactiveCodeTagger(buffer, documentUri, inactiveClassification));
+                return inactiveTagger ??= new ShaderInactiveCodeTagger(buffer, documentUri, inactiveClassification);
             }
         }
 
@@ -323,12 +322,12 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void OnFileActionOccurred(object sender, TextDocumentFileActionEventArgs e)
         {
-            if (!(sender is ITextDocument source))
+            if (sender is not ITextDocument source)
             {
                 return;
             }
 
-            var path = string.IsNullOrWhiteSpace(e?.FilePath) ? source.FilePath : e.FilePath;
+            string path = string.IsNullOrWhiteSpace(e?.FilePath) ? source.FilePath : e.FilePath;
             UpdateDocumentUri(source, NormalizeFilePath(path));
         }
 
@@ -353,7 +352,7 @@ namespace ShaderTools.VisualStudio.Editor
 
         private IShaderDocumentUriListener[] GetUriListeners()
         {
-            var result = new List<IShaderDocumentUriListener>();
+            List<IShaderDocumentUriListener> result = [];
             if (foldingTagger != null)
             {
                 result.Add(foldingTagger);
@@ -364,9 +363,9 @@ namespace ShaderTools.VisualStudio.Editor
                 result.Add(inactiveTagger);
             }
 
-            for (var index = uriListeners.Count - 1; index >= 0; index--)
+            for (int index = uriListeners.Count - 1; index >= 0; index--)
             {
-                if (uriListeners[index].TryGetTarget(out var listener))
+                if (uriListeners[index].TryGetTarget(out IShaderDocumentUriListener listener))
                 {
                     result.Add(listener);
                 }
@@ -381,9 +380,9 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void RemoveDeadUriListenersOr(IShaderDocumentUriListener listener)
         {
-            for (var index = uriListeners.Count - 1; index >= 0; index--)
+            for (int index = uriListeners.Count - 1; index >= 0; index--)
             {
-                if (!uriListeners[index].TryGetTarget(out var target) || ReferenceEquals(target, listener))
+                if (!uriListeners[index].TryGetTarget(out IShaderDocumentUriListener target) || ReferenceEquals(target, listener))
                 {
                     uriListeners.RemoveAt(index);
                 }
@@ -400,7 +399,7 @@ namespace ShaderTools.VisualStudio.Editor
                 return;
             }
 
-            foreach (var listener in listeners)
+            foreach (IShaderDocumentUriListener listener in listeners)
             {
                 listener.OnDocumentUriChanged(oldUri, newUri);
             }
@@ -454,7 +453,7 @@ namespace ShaderTools.VisualStudio.Editor
             ConnectionReason reason,
             IReadOnlyCollection<ITextBuffer> subjectBuffers)
         {
-            foreach (var buffer in subjectBuffers)
+            foreach (ITextBuffer buffer in subjectBuffers)
             {
                 manager.Connect(buffer);
             }
@@ -465,7 +464,7 @@ namespace ShaderTools.VisualStudio.Editor
             ConnectionReason reason,
             IReadOnlyCollection<ITextBuffer> subjectBuffers)
         {
-            foreach (var buffer in subjectBuffers)
+            foreach (ITextBuffer buffer in subjectBuffers)
             {
                 manager.Disconnect(buffer);
             }

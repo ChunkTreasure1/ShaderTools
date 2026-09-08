@@ -1,7 +1,7 @@
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -17,23 +17,23 @@ namespace ShaderTools.VisualStudio.Editor
 
         public static void Update(JToken parameters)
         {
-            if (!(parameters is JObject parameterObject))
+            if (parameters is not JObject parameterObject)
             {
                 return;
             }
 
-            var uri = NormalizeUri(parameterObject.Value<string>("uri"));
+            string uri = NormalizeUri(parameterObject.Value<string>("uri"));
             if (uri == null)
             {
                 return;
             }
 
-            var diagnosticSet = ParseDiagnostics(parameterObject["diagnostics"] as JArray);
+            DiagnosticSet diagnosticSet = ParseDiagnostics(parameterObject["diagnostics"] as JArray);
             ShaderInactiveCodeTagger[] subscribers;
 
             lock (Gate)
             {
-                if (!Subscriptions.TryGetValue(uri, out var subscription))
+                if (!Subscriptions.TryGetValue(uri, out DiagnosticSubscription subscription))
                 {
                     // Diagnostics for closed documents are intentionally not retained.
                     return;
@@ -43,12 +43,12 @@ namespace ShaderTools.VisualStudio.Editor
                 subscribers = subscription.GetLiveSubscribers();
                 if (subscribers.Length == 0)
                 {
-                    Subscriptions.Remove(uri);
+                    _=Subscriptions.Remove(uri);
                     return;
                 }
             }
 
-            foreach (var subscriber in subscribers)
+            foreach (ShaderInactiveCodeTagger subscriber in subscribers)
             {
                 subscriber.SetDiagnostics(uri, diagnosticSet);
             }
@@ -63,13 +63,13 @@ namespace ShaderTools.VisualStudio.Editor
                     .SelectMany(subscription => subscription.GetLiveSubscribers())
                     .Distinct()
                     .ToArray();
-                foreach (var subscription in Subscriptions.Values)
+                foreach (DiagnosticSubscription subscription in Subscriptions.Values)
                 {
                     subscription.Current = DiagnosticSet.Empty;
                 }
             }
 
-            foreach (var subscriber in subscribers)
+            foreach (ShaderInactiveCodeTagger subscriber in subscribers)
             {
                 subscriber.ClearDiagnostics();
             }
@@ -78,7 +78,7 @@ namespace ShaderTools.VisualStudio.Editor
         internal static string NormalizeUri(string uriText)
         {
             if (string.IsNullOrWhiteSpace(uriText) ||
-                !Uri.TryCreate(uriText, UriKind.Absolute, out var uri))
+                !Uri.TryCreate(uriText, UriKind.Absolute, out Uri uri))
             {
                 return null;
             }
@@ -96,7 +96,7 @@ namespace ShaderTools.VisualStudio.Editor
             DiagnosticSet current;
             lock (Gate)
             {
-                if (!Subscriptions.TryGetValue(uri, out var subscription))
+                if (!Subscriptions.TryGetValue(uri, out DiagnosticSubscription subscription))
                 {
                     subscription = new DiagnosticSubscription();
                     Subscriptions.Add(uri, subscription);
@@ -119,7 +119,7 @@ namespace ShaderTools.VisualStudio.Editor
 
             lock (Gate)
             {
-                if (!Subscriptions.TryGetValue(uri, out var subscription))
+                if (!Subscriptions.TryGetValue(uri, out DiagnosticSubscription subscription))
                 {
                     return;
                 }
@@ -127,7 +127,7 @@ namespace ShaderTools.VisualStudio.Editor
                 subscription.RemoveDeadOr(tagger);
                 if (subscription.Subscribers.Count == 0)
                 {
-                    Subscriptions.Remove(uri);
+                    _=Subscriptions.Remove(uri);
                 }
             }
         }
@@ -145,18 +145,18 @@ namespace ShaderTools.VisualStudio.Editor
             DiagnosticSet current = DiagnosticSet.Empty;
             lock (Gate)
             {
-                if (oldUri != null && Subscriptions.TryGetValue(oldUri, out var oldSubscription))
+                if (oldUri != null && Subscriptions.TryGetValue(oldUri, out DiagnosticSubscription oldSubscription))
                 {
                     oldSubscription.RemoveDeadOr(tagger);
                     if (oldSubscription.Subscribers.Count == 0)
                     {
-                        Subscriptions.Remove(oldUri);
+                        _=Subscriptions.Remove(oldUri);
                     }
                 }
 
                 if (newUri != null)
                 {
-                    if (!Subscriptions.TryGetValue(newUri, out var newSubscription))
+                    if (!Subscriptions.TryGetValue(newUri, out DiagnosticSubscription newSubscription))
                     {
                         newSubscription = new DiagnosticSubscription();
                         Subscriptions.Add(newUri, newSubscription);
@@ -180,17 +180,17 @@ namespace ShaderTools.VisualStudio.Editor
                 return DiagnosticSet.Empty;
             }
 
-            var inactiveRanges = new List<LspTextRange>();
-            var errorRanges = new List<LspTextRange>();
-            foreach (var token in diagnostics.Take(MaximumDiagnostics))
+            List<LspTextRange> inactiveRanges = [];
+            List<LspTextRange> errorRanges = [];
+            foreach (JToken token in diagnostics.Take(MaximumDiagnostics))
             {
-                if (!(token is JObject diagnostic) ||
-                    !LspTextRange.TryParse(diagnostic["range"], out var range))
+                if (token is not JObject diagnostic ||
+                    !LspTextRange.TryParse(diagnostic["range"], out LspTextRange range))
                 {
                     continue;
                 }
 
-                var severity = ReadInteger(diagnostic["severity"]);
+                int? severity = ReadInteger(diagnostic["severity"]);
                 if (severity == DiagnosticSeverityError)
                 {
                     errorRanges.Add(range);
@@ -215,7 +215,7 @@ namespace ShaderTools.VisualStudio.Editor
                 return false;
             }
 
-            foreach (var tag in tags)
+            foreach (JToken tag in tags)
             {
                 if (ReadInteger(tag) == DiagnosticTagUnnecessary)
                 {
@@ -233,23 +233,23 @@ namespace ShaderTools.VisualStudio.Editor
                 return null;
             }
 
-            var value = token.Value<long>();
-            return value >= int.MinValue && value <= int.MaxValue ? (int?)value : null;
+            long value = token.Value<long>();
+            return value is >=int.MinValue and <=int.MaxValue ? (int?)value : null;
         }
 
         private sealed class DiagnosticSubscription
         {
             internal List<WeakReference<ShaderInactiveCodeTagger>> Subscribers { get; } =
-                new List<WeakReference<ShaderInactiveCodeTagger>>();
+                [];
 
             internal DiagnosticSet Current { get; set; } = DiagnosticSet.Empty;
 
             internal ShaderInactiveCodeTagger[] GetLiveSubscribers()
             {
-                var result = new List<ShaderInactiveCodeTagger>(Subscribers.Count);
-                for (var index = Subscribers.Count - 1; index >= 0; index--)
+                List<ShaderInactiveCodeTagger> result = new List<ShaderInactiveCodeTagger>(Subscribers.Count);
+                for (int index = Subscribers.Count - 1; index >= 0; index--)
                 {
-                    if (Subscribers[index].TryGetTarget(out var target))
+                    if (Subscribers[index].TryGetTarget(out ShaderInactiveCodeTagger target))
                     {
                         result.Add(target);
                     }
@@ -264,9 +264,9 @@ namespace ShaderTools.VisualStudio.Editor
 
             internal void RemoveDeadOr(ShaderInactiveCodeTagger tagger)
             {
-                for (var index = Subscribers.Count - 1; index >= 0; index--)
+                for (int index = Subscribers.Count - 1; index >= 0; index--)
                 {
-                    if (!Subscribers[index].TryGetTarget(out var target) || ReferenceEquals(target, tagger))
+                    if (!Subscribers[index].TryGetTarget(out ShaderInactiveCodeTagger target) || ReferenceEquals(target, tagger))
                     {
                         Subscribers.RemoveAt(index);
                     }

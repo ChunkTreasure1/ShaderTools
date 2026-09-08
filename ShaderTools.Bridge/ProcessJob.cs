@@ -1,8 +1,8 @@
+using Microsoft.Win32.SafeHandles;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 
 namespace ShaderTools.Bridge
 {
@@ -27,7 +27,7 @@ namespace ShaderTools.Bridge
                 throw new PlatformNotSupportedException("Shader Tools process containment requires Windows.");
             }
 
-            var handle = NativeMethods.CreateJobObject(IntPtr.Zero, null);
+            SafeJobHandle handle = NativeMethods.CreateJobObject(IntPtr.Zero, null);
             if (handle.IsInvalid)
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Cannot create the Shader Tools process job.");
@@ -35,7 +35,7 @@ namespace ShaderTools.Bridge
 
             try
             {
-                var information = new JobObjectExtendedLimitInformation
+                JobObjectExtendedLimitInformation information = new JobObjectExtendedLimitInformation
                 {
                     BasicLimitInformation = new JobObjectBasicLimitInformation
                     {
@@ -72,7 +72,11 @@ namespace ShaderTools.Bridge
 
         public void Add(Process process)
         {
-            if (process == null) throw new ArgumentNullException(nameof(process));
+            if (process == null)
+            {
+                throw new ArgumentNullException(nameof(process));
+            }
+
             if (!NativeMethods.AssignProcessToJobObject(handle, process.Handle))
             {
                 throw new Win32Exception(

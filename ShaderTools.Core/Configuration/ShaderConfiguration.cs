@@ -1,7 +1,7 @@
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.Core.Configuration;
 
@@ -93,16 +93,16 @@ public sealed class ShaderConfiguration
             throw new ArgumentException("A workspace root is required.", nameof(workspaceRoot));
         }
 
-        var absoluteWorkspaceRoot = Path.GetFullPath(workspaceRoot);
-        var configurationPath = Path.Combine(absoluteWorkspaceRoot, FileName);
-        var settings = CreateDefaultSettings();
+        string absoluteWorkspaceRoot = Path.GetFullPath(workspaceRoot);
+        string configurationPath = Path.Combine(absoluteWorkspaceRoot, FileName);
+        JObject settings = CreateDefaultSettings();
 
         if (!string.IsNullOrWhiteSpace(userSettingsPath))
         {
-            var absoluteUserPath = Path.GetFullPath(userSettingsPath!);
+            string absoluteUserPath = Path.GetFullPath(userSettingsPath!);
             if (File.Exists(absoluteUserPath))
             {
-                var baseDirectory = Path.GetDirectoryName(absoluteUserPath) ?? absoluteWorkspaceRoot;
+                string baseDirectory = Path.GetDirectoryName(absoluteUserPath) ?? absoluteWorkspaceRoot;
                 Merge(settings, LoadLayer(absoluteUserPath, baseDirectory, absoluteWorkspaceRoot));
             }
         }
@@ -118,8 +118,8 @@ public sealed class ShaderConfiguration
 
     public static JObject CreateDefaultSettings()
     {
-        var stageDefine = new JObject();
-        foreach (var stageName in StageNames)
+        JObject stageDefine = [];
+        foreach (string stageName in StageNames)
         {
             stageDefine[stageName] = new JObject();
         }
@@ -157,8 +157,8 @@ public sealed class ShaderConfiguration
 
     private static JObject LoadLayer(string filePath, string baseDirectory, string workspaceRoot)
     {
-        var token = ConfigurationJson.ReadJson(filePath);
-        if (!(token is JObject layer))
+        JToken token = ConfigurationJson.ReadJson(filePath);
+        if (token is not JObject layer)
         {
             throw ConfigurationJson.Invalid(filePath, "$", "must be a JSON object");
         }
@@ -189,17 +189,17 @@ public sealed class ShaderConfiguration
 
         if (layer["includes"] != null)
         {
-            ConfigurationJson.OptionalStringArray(layer, "includes", filePath, string.Empty);
+            _=ConfigurationJson.OptionalStringArray(layer, "includes", filePath, string.Empty);
         }
 
         if (layer["defines"] != null)
         {
-            ConfigurationJson.OptionalStringMap(layer, "defines", filePath, string.Empty);
+            _=ConfigurationJson.OptionalStringMap(layer, "defines", filePath, string.Empty);
         }
 
         if (layer["pathRemapping"] != null)
         {
-            ConfigurationJson.OptionalStringMap(layer, "pathRemapping", filePath, string.Empty);
+            _=ConfigurationJson.OptionalStringMap(layer, "pathRemapping", filePath, string.Empty);
         }
 
         ValidateStageDefines(layer, filePath);
@@ -211,21 +211,21 @@ public sealed class ShaderConfiguration
 
     private static void ValidateStageDefines(JObject layer, string filePath)
     {
-        var token = layer["stageDefine"];
+        JToken? token = layer["stageDefine"];
         if (token == null)
         {
             return;
         }
 
-        if (!(token is JObject stageDefine))
+        if (token is not JObject stageDefine)
         {
             throw ConfigurationJson.Invalid(filePath, "stageDefine", "must be an object");
         }
 
         ConfigurationJson.RejectUnknownProperties(stageDefine, StageNames, filePath, "stageDefine");
-        foreach (var property in stageDefine.Properties())
+        foreach (JProperty property in stageDefine.Properties())
         {
-            if (!(property.Value is JObject defines))
+            if (property.Value is not JObject defines)
             {
                 throw ConfigurationJson.Invalid(filePath, "stageDefine." + property.Name, "must be an object whose values are strings");
             }
@@ -236,13 +236,13 @@ public sealed class ShaderConfiguration
 
     private static void ValidateTrace(JObject layer, string filePath)
     {
-        var token = layer["trace"];
+        JToken? token = layer["trace"];
         if (token == null)
         {
             return;
         }
 
-        if (!(token is JObject trace))
+        if (token is not JObject trace)
         {
             throw ConfigurationJson.Invalid(filePath, "trace", "must be an object");
         }
@@ -257,7 +257,7 @@ public sealed class ShaderConfiguration
 
     private static void ValidateHlsl(JObject layer, string filePath)
     {
-        var hlsl = OptionalObject(layer, "hlsl", filePath, string.Empty);
+        JObject? hlsl = OptionalObject(layer, "hlsl", filePath, string.Empty);
         if (hlsl == null)
         {
             return;
@@ -286,7 +286,7 @@ public sealed class ShaderConfiguration
 
     private static void ValidateGlsl(JObject layer, string filePath)
     {
-        var glsl = OptionalObject(layer, "glsl", filePath, string.Empty);
+        JObject? glsl = OptionalObject(layer, "glsl", filePath, string.Empty);
         if (glsl == null)
         {
             return;
@@ -301,7 +301,7 @@ public sealed class ShaderConfiguration
 
     private static void ValidateWgsl(JObject layer, string filePath)
     {
-        var wgsl = OptionalObject(layer, "wgsl", filePath, string.Empty);
+        JObject? wgsl = OptionalObject(layer, "wgsl", filePath, string.Empty);
         if (wgsl == null)
         {
             return;
@@ -313,13 +313,13 @@ public sealed class ShaderConfiguration
 
     private static JObject? OptionalObject(JObject parent, string name, string filePath, string path)
     {
-        var token = parent[name];
+        JToken? token = parent[name];
         if (token == null)
         {
             return null;
         }
 
-        if (!(token is JObject result))
+        if (token is not JObject result)
         {
             throw ConfigurationJson.Invalid(filePath, ConfigurationJson.JoinPath(path, name), "must be an object");
         }
@@ -329,7 +329,7 @@ public sealed class ShaderConfiguration
 
     private static void ValidateBoolean(JObject parent, string name, string filePath, string path)
     {
-        var token = parent[name];
+        JToken? token = parent[name];
         if (token != null && token.Type != JTokenType.Boolean)
         {
             throw ConfigurationJson.Invalid(filePath, ConfigurationJson.JoinPath(path, name), "must be a boolean");
@@ -338,7 +338,7 @@ public sealed class ShaderConfiguration
 
     private static void ValidateOptionalString(JObject parent, string name, string filePath, string path)
     {
-        var token = parent[name];
+        JToken? token = parent[name];
         if (token != null && token.Type != JTokenType.String)
         {
             throw ConfigurationJson.Invalid(filePath, ConfigurationJson.JoinPath(path, name), "must be a string");
@@ -347,19 +347,19 @@ public sealed class ShaderConfiguration
 
     private static void ValidateEnum(JObject parent, string name, string filePath, string path, params string[] allowedValues)
     {
-        var token = parent[name];
+        JToken? token = parent[name];
         if (token == null)
         {
             return;
         }
 
-        var propertyPath = ConfigurationJson.JoinPath(path, name);
+        string propertyPath = ConfigurationJson.JoinPath(path, name);
         if (token.Type != JTokenType.String)
         {
             throw ConfigurationJson.Invalid(filePath, propertyPath, "must be a string");
         }
 
-        var value = token.Value<string>();
+        string? value = token.Value<string>();
         if (Array.IndexOf(allowedValues, value) < 0)
         {
             throw ConfigurationJson.Invalid(filePath, propertyPath, $"must be one of: {string.Join(", ", allowedValues)}");
@@ -368,7 +368,7 @@ public sealed class ShaderConfiguration
 
     private static void ExpandTextValues(JToken token, string workspaceRoot, string filePath)
     {
-        foreach (var child in token.Children())
+        foreach (JToken child in token.Children())
         {
             if (child is JProperty property && property.Value.Type == JTokenType.String)
             {
@@ -389,7 +389,7 @@ public sealed class ShaderConfiguration
     {
         if (layer["includes"] is JArray includes)
         {
-            for (var index = 0; index < includes.Count; index++)
+            for (int index = 0; index < includes.Count; index++)
             {
                 includes[index] = ConfigurationJson.ResolvePath(includes[index].Value<string>()!, baseDirectory, workspaceRoot, filePath, $"includes[{index}]");
             }
@@ -397,7 +397,7 @@ public sealed class ShaderConfiguration
 
         if (layer["pathRemapping"] is JObject remapping)
         {
-            foreach (var property in remapping.Properties())
+            foreach (JProperty property in remapping.Properties())
             {
                 property.Value = ConfigurationJson.ResolvePath(property.Value.Value<string>()!, baseDirectory, workspaceRoot, filePath, "pathRemapping." + property.Name);
             }
@@ -416,7 +416,7 @@ public sealed class ShaderConfiguration
 
     private static void Merge(JObject target, JObject source)
     {
-        foreach (var property in source.Properties())
+        foreach (JProperty property in source.Properties())
         {
             if (property.Value is JObject sourceObject && target[property.Name] is JObject targetObject)
             {
@@ -431,21 +431,21 @@ public sealed class ShaderConfiguration
 
     private static void RemoveClientOnlySettings(JObject settings)
     {
-        settings.Remove("$schema");
-        settings.Remove("serverPath");
-        settings.Remove("useWasiServer");
-        settings.Remove("updateSymbolsOnVariantUpdate");
+        _=settings.Remove("$schema");
+        _=settings.Remove("serverPath");
+        _=settings.Remove("useWasiServer");
+        _=settings.Remove("updateSymbolsOnVariantUpdate");
 
         if (settings["hlsl"] is JObject hlsl)
         {
-            hlsl.Remove("enabled");
+            _=hlsl.Remove("enabled");
         }
 
         if (settings["glsl"] is JObject glsl)
         {
-            glsl.Remove("enabled");
+            _=glsl.Remove("enabled");
         }
 
-        settings.Remove("wgsl");
+        _=settings.Remove("wgsl");
     }
 }

@@ -1,10 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.Composition;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using ShaderTools.VisualStudio.LanguageClient;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Text.Editor;
@@ -12,6 +5,12 @@ using Microsoft.VisualStudio.Text.Formatting;
 using Microsoft.VisualStudio.Text.Tagging;
 using Microsoft.VisualStudio.Utilities;
 using ShaderTools.Core.Highlighting;
+using ShaderTools.VisualStudio.LanguageClient;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -24,7 +23,10 @@ namespace ShaderTools.VisualStudio.Editor
 
         public ITagger<T> CreateTagger<T>(ITextView view, ITextBuffer buffer) where T : ITag
         {
-            if (!typeof(T).IsAssignableFrom(typeof(ClassificationTag)) || !ReferenceEquals(view.TextBuffer, buffer)) return null;
+            if (!typeof(T).IsAssignableFrom(typeof(ClassificationTag)) || !ReferenceEquals(view.TextBuffer, buffer))
+            {
+                return null;
+            }
             // Each aggregator owns and disposes its taggers. A view singleton can
             // be disposed by a temporary aggregator while the editor still uses it.
             return (ITagger<T>)(object)new ShaderClassificationTagger(
@@ -41,7 +43,7 @@ namespace ShaderTools.VisualStudio.Editor
         private readonly ITextBuffer buffer;
         private readonly IClassificationTypeRegistryService registry;
         private readonly IClassificationFormatMap formatMap;
-        private readonly Dictionary<ShaderTokenKind, IClassificationType> types = new Dictionary<ShaderTokenKind, IClassificationType>();
+        private readonly Dictionary<ShaderTokenKind, IClassificationType> types = [];
         private readonly object gate = new object();
         private CancellationTokenSource pending;
         private ITextSnapshot classifiedSnapshot;
@@ -75,67 +77,111 @@ namespace ShaderTools.VisualStudio.Editor
 
         public IEnumerable<ITagSpan<ClassificationTag>> GetTags(NormalizedSnapshotSpanCollection spans)
         {
-            if (spans.Count == 0 || !Options.ShaderOptions.Current.UseCppColors) yield break;
+            if (spans.Count == 0 || !Options.ShaderOptions.Current.UseCppColors)
+            {
+                yield break;
+            }
+
             IReadOnlyList<ShaderClassificationSpan> current;
             ITextSnapshot sourceSnapshot;
             lock (gate)
             {
-                if (disposed || classifiedSnapshot == null) yield break;
+                if (disposed || classifiedSnapshot == null)
+                {
+                    yield break;
+                }
+
                 current = classified;
                 sourceSnapshot = classifiedSnapshot;
             }
             // The classifier returns sorted, disjoint spans. Binary search avoids
             // scanning the entire file for every visible line requested by VS.
-            foreach (var requested in spans)
+            foreach (SnapshotSpan requested in spans)
             {
-                var original = requested.TranslateTo(sourceSnapshot, SpanTrackingMode.EdgeInclusive);
+                SnapshotSpan original = requested.TranslateTo(sourceSnapshot, SpanTrackingMode.EdgeInclusive);
                 int low = 0, high = current.Count;
                 while (low < high)
                 {
-                    int mid = low + (high - low) / 2;
-                    if (current[mid].Start + current[mid].Length <= original.Start.Position) low = mid + 1;
-                    else high = mid;
+                    int mid = low + ((high - low) / 2);
+                    if (current[mid].Start + current[mid].Length <= original.Start.Position)
+                    {
+                        low = mid + 1;
+                    }
+                    else
+                    {
+                        high = mid;
+                    }
                 }
                 for (int index = low; index < current.Count && current[index].Start < original.End.Position; index++)
                 {
-                    var token = current[index];
-                    var translated = new SnapshotSpan(sourceSnapshot, token.Start, token.Length)
+                    ShaderClassificationSpan token = current[index];
+                    SnapshotSpan translated = new SnapshotSpan(sourceSnapshot, token.Start, token.Length)
                         .TranslateTo(requested.Snapshot, SpanTrackingMode.EdgeExclusive);
                     int start = Math.Max(translated.Start.Position, requested.Start.Position);
                     int end = Math.Min(translated.End.Position, requested.End.Position);
-                    if (end > start) yield return new TagSpan<ClassificationTag>(
+                    if (end > start)
+                    {
+                        yield return new TagSpan<ClassificationTag>(
                         new SnapshotSpan(requested.Snapshot, start, end - start), new ClassificationTag(types[token.Kind]));
+                    }
                 }
             }
         }
 
-        private void OnBufferChanged(object sender, TextContentChangedEventArgs e) => Schedule();
+        private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
+        {
+            Schedule();
+        }
+
         private void OnContentTypeChanged(object sender, ContentTypeChangedEventArgs e) { Schedule(); RaiseChanged(); }
         public void OnShaderOptionsChanged() { Schedule(); RaiseChanged(); }
-        private void OnColorsChanged(object sender, EventArgs e) => SynchronizeColors();
+        private void OnColorsChanged(object sender, EventArgs e)
+        {
+            SynchronizeColors();
+        }
 
         private void SynchronizeColors()
         {
-            if (disposed || synchronizingColors) return;
+            if (disposed || synchronizingColors)
+            {
+                return;
+            }
+
             synchronizingColors = true;
             try
             {
-                foreach (var entry in types)
+                foreach (KeyValuePair<ShaderTokenKind, IClassificationType> entry in types)
                 {
                     IClassificationType source = null;
                     foreach (string candidate in Sources(entry.Key))
-                        if ((source = registry.GetClassificationType(candidate)) != null) break;
-                    if (source == null) continue;
-                    var style = formatMap.GetTextProperties(source);
+                    {
+                        if ((source = registry.GetClassificationType(candidate)) != null)
+                        {
+                            break;
+                        }
+                    }
+
+                    if (source == null)
+                    {
+                        continue;
+                    }
+
+                    TextFormattingRunProperties style = formatMap.GetTextProperties(source);
                     bool registered = formatMap.CurrentPriorityOrder.Contains(entry.Value);
-                    var previous = registered ? formatMap.GetExplicitTextProperties(entry.Value) : null;
+                    TextFormattingRunProperties previous = registered ? formatMap.GetExplicitTextProperties(entry.Value) : null;
                     if (previous != null && !previous.ForegroundBrushEmpty && previous.ForegroundBrushSame(style.ForegroundBrush) &&
-                        !previous.BoldEmpty && previous.Bold == style.Bold && !previous.ItalicEmpty && previous.Italic == style.Italic) continue;
+                        !previous.BoldEmpty && previous.Bold == style.Bold && !previous.ItalicEmpty && previous.Italic == style.Italic)
+                    {
+                        continue;
+                    }
                     // Only set color/bold/italic. Keeping opacity and background unset
                     // allows inactive-code fading, selection and error adornments to compose.
-                    var properties = TextFormattingRunProperties.CreateTextFormattingRunProperties()
+                    TextFormattingRunProperties properties = TextFormattingRunProperties.CreateTextFormattingRunProperties()
                         .SetForegroundBrush(style.ForegroundBrush).SetBold(style.Bold).SetItalic(style.Italic);
-                    if (!registered) formatMap.AddExplicitTextProperties(entry.Value, properties);
+                    if (!registered)
+                    {
+                        formatMap.AddExplicitTextProperties(entry.Value, properties);
+                    }
                     // AddExplicitTextProperties behaves like SetTextProperties for
                     // an existing entry and can drop values equal to the defaults.
                     // Keep those values explicit so lower-priority TextMate styles
@@ -177,7 +223,11 @@ namespace ShaderTools.VisualStudio.Editor
             CancellationTokenSource work;
             lock (gate)
             {
-                if (disposed) return;
+                if (disposed)
+                {
+                    return;
+                }
+
                 pending?.Cancel();
                 pending = null;
                 if (!enabled)
@@ -196,10 +246,14 @@ namespace ShaderTools.VisualStudio.Editor
             try
             {
                 await Task.Delay(100, work.Token).ConfigureAwait(false);
-                var result = await Task.Run(() => ShaderClassifier.Classify(snapshot.GetText(), hlsl, work.Token), work.Token).ConfigureAwait(false);
+                IReadOnlyList<ShaderClassificationSpan> result = await Task.Run(() => ShaderClassifier.Classify(snapshot.GetText(), hlsl, work.Token), work.Token).ConfigureAwait(false);
                 lock (gate)
                 {
-                    if (disposed || !ReferenceEquals(pending, work) || snapshot != buffer.CurrentSnapshot) return;
+                    if (disposed || !ReferenceEquals(pending, work) || snapshot != buffer.CurrentSnapshot)
+                    {
+                        return;
+                    }
+
                     classified = result;
                     classifiedSnapshot = snapshot;
                 }
@@ -209,22 +263,42 @@ namespace ShaderTools.VisualStudio.Editor
             catch (Exception ex) { Services.ShaderOutput.Log("Shader colors: " + ex.Message); }
             finally
             {
-                lock (gate) { if (ReferenceEquals(pending, work)) pending = null; }
+                lock (gate)
+                {
+                    if (ReferenceEquals(pending, work))
+                    {
+                        pending = null;
+                    }
+                }
                 work.Dispose();
             }
         }
 
-        private void RaiseChanged() => ShaderUiNotifications.Post(() =>
+        private void RaiseChanged()
         {
-            if (!disposed) TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(new SnapshotSpan(buffer.CurrentSnapshot, 0, buffer.CurrentSnapshot.Length)));
+            ShaderUiNotifications.Post(() =>
+        {
+            if (!disposed)
+            {
+                TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(new SnapshotSpan(buffer.CurrentSnapshot, 0, buffer.CurrentSnapshot.Length)));
+            }
         });
+        }
 
-        private void OnClosed(object sender, EventArgs e) => Dispose();
+        private void OnClosed(object sender, EventArgs e)
+        {
+            Dispose();
+        }
+
         public void Dispose()
         {
             lock (gate)
             {
-                if (disposed) return;
+                if (disposed)
+                {
+                    return;
+                }
+
                 disposed = true;
                 pending?.Cancel();
                 classified = Array.Empty<ShaderClassificationSpan>();

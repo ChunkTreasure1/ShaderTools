@@ -1,7 +1,7 @@
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.Core.Editor;
 
@@ -15,19 +15,29 @@ public sealed class InlayHintCache
 
     public static IReadOnlyList<string> ReadCompletionSignatures(JToken? response)
     {
-        var items = response as JArray ?? (response as JObject)?["items"] as JArray;
-        if (items == null) return Array.Empty<string>();
-        var declarations = new List<string>();
-        foreach (var item in items.OfType<JObject>().Take(8192))
+        JArray? items = response as JArray ?? (response as JObject)?["items"] as JArray;
+        if (items == null)
         {
-            var documentation = item["documentation"];
-            var markdown = documentation?.Type == JTokenType.String ? documentation.Value<string>() :
+            return Array.Empty<string>();
+        }
+
+        List<string> declarations = [];
+        foreach (JObject? item in items.OfType<JObject>().Take(8192))
+        {
+            JToken? documentation = item["documentation"];
+            string? markdown = documentation?.Type == JTokenType.String ? documentation.Value<string>() :
                 (documentation as JObject)?.Value<string>("value");
-            if (markdown == null || !markdown.StartsWith("```", StringComparison.Ordinal)) continue;
-            var start = markdown.IndexOf('\n');
-            var end = start < 0 ? -1 : markdown.IndexOf("```", start + 1, StringComparison.Ordinal);
+            if (markdown == null || !markdown.StartsWith("```", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            int start = markdown.IndexOf('\n');
+            int end = start < 0 ? -1 : markdown.IndexOf("```", start + 1, StringComparison.Ordinal);
             if (end > start && end - start <= 65536)
+            {
                 declarations.Add(markdown.Substring(start + 1, end - start - 1));
+            }
         }
         return declarations;
     }
@@ -43,22 +53,32 @@ public sealed class InlayHintCache
     public void SetExternalSignatures(IEnumerable<string> declarations)
     {
         externalSignatures.Clear();
-        foreach (var declaration in declarations)
+        foreach (string declaration in declarations)
         {
-            var parsed = new ShaderCallSyntax(declaration);
-            foreach (var entry in parsed.Signatures)
+            ShaderCallSyntax parsed = new ShaderCallSyntax(declaration);
+            foreach (KeyValuePair<string, List<string[]>> entry in parsed.Signatures)
             {
-                if (!externalSignatures.TryGetValue(entry.Key, out var overloads))
-                    externalSignatures.Add(entry.Key, overloads = new List<string[]>());
+                if (!externalSignatures.TryGetValue(entry.Key, out List<string[]>? overloads))
+                {
+                    externalSignatures.Add(entry.Key, overloads = []);
+                }
+
                 overloads.AddRange(entry.Value);
             }
             // Constructor signatures in completion documentation have no return type.
-            foreach (var call in parsed.Calls.Values.Where(call => call.Closed))
+            foreach (ShaderCallSyntax.Call? call in parsed.Calls.Values.Where(call => call.Closed))
             {
-                var names = ShaderCallSyntax.ParameterNames(call);
-                if (names.Length == 0 || names.Any(string.IsNullOrEmpty)) continue;
-                if (!externalSignatures.TryGetValue(call.Name, out var overloads))
-                    externalSignatures.Add(call.Name, overloads = new List<string[]>());
+                string[] names = ShaderCallSyntax.ParameterNames(call);
+                if (names.Length == 0 || names.Any(string.IsNullOrEmpty))
+                {
+                    continue;
+                }
+
+                if (!externalSignatures.TryGetValue(call.Name, out List<string[]>? overloads))
+                {
+                    externalSignatures.Add(call.Name, overloads = []);
+                }
+
                 overloads.Add(names);
             }
         }
@@ -66,35 +86,39 @@ public sealed class InlayHintCache
 
     public IReadOnlyList<int> ApplyEdits(int beforeVersion, int afterVersion, IReadOnlyList<InlayHintEdit> edits, string text)
     {
-        var next = new ShaderCallSyntax(text);
-        var changedSignatures = new HashSet<string>(syntax.Signatures.Keys.Concat(next.Signatures.Keys)
-            .Where(name => !syntax.Signatures.TryGetValue(name, out var before) ||
-                !next.Signatures.TryGetValue(name, out var after) ||
+        ShaderCallSyntax next = new ShaderCallSyntax(text);
+        HashSet<string> changedSignatures = new HashSet<string>(syntax.Signatures.Keys.Concat(next.Signatures.Keys)
+            .Where(name => !syntax.Signatures.TryGetValue(name, out List<string[]>? before) ||
+                !next.Signatures.TryGetValue(name, out List<string[]>? after) ||
                 !before.Select(s => string.Join("\0", s)).SequenceEqual(after.Select(s => string.Join("\0", s)))), StringComparer.Ordinal);
-        var retained = new List<ParameterHint>(Hints.Count);
+        List<ParameterHint> retained = new List<ParameterHint>(Hints.Count);
         if (Version == beforeVersion)
         {
-            foreach (var hint in Hints)
+            foreach (ParameterHint hint in Hints)
             {
-                var offset = syntax.Offset(hint.Line, hint.Character);
-                if (syntax.ArgumentsByStart.TryGetValue(offset, out var previous))
+                int offset = syntax.Offset(hint.Line, hint.Character);
+                if (syntax.ArgumentsByStart.TryGetValue(offset, out (ShaderCallSyntax.Call Call, ShaderCallSyntax.Argument Argument) previous))
                 {
-                    var oldCall = previous.Call;
-                    var argument = previous.Argument;
-                    var nameStart = MapPosition(oldCall.NameStart, edits);
-                    if (nameStart.HasValue && next.Calls.TryGetValue(nameStart.Value, out var call) && call.Name == oldCall.Name &&
+                    ShaderCallSyntax.Call oldCall = previous.Call;
+                    ShaderCallSyntax.Argument argument = previous.Argument;
+                    int? nameStart = MapPosition(oldCall.NameStart, edits);
+                    if (nameStart.HasValue && next.Calls.TryGetValue(nameStart.Value, out ShaderCallSyntax.Call? call) && call.Name == oldCall.Name &&
                         argument.Index < call.Arguments.Count && call.Arguments[argument.Index].Tokens.Count > 0)
+                    {
                         retained.Add(next.Hint(call.Arguments[argument.Index], hint.Label, hint.Identity, hint.PaddingLeft, hint.PaddingRight));
+                    }
                 }
             }
         }
-        var retainedIdentities = new HashSet<object>(retained.Select(h => h.Identity));
-        var removedLines = new HashSet<int>();
-        foreach (var hint in Hints.Where(h => !retainedIdentities.Contains(h.Identity)))
+        HashSet<object> retainedIdentities = [.. retained.Select(h => h.Identity)];
+        HashSet<int> removedLines = [];
+        foreach (ParameterHint? hint in Hints.Where(h => !retainedIdentities.Contains(h.Identity)))
         {
-            var mapped = MapPosition(syntax.Offset(hint.Line, hint.Character), edits);
+            int? mapped = MapPosition(syntax.Offset(hint.Line, hint.Character), edits);
             if (mapped.HasValue && mapped.Value >= 0 && mapped.Value <= text.Length)
-                removedLines.Add(next.LineAtOffset(mapped.Value));
+            {
+                _=removedLines.Add(next.LineAtOffset(mapped.Value));
+            }
         }
         syntax = next;
         Version = afterVersion;
@@ -105,40 +129,72 @@ public sealed class InlayHintCache
 
     private static int? MapPosition(int position, IReadOnlyList<InlayHintEdit> edits)
     {
-        var delta = 0;
-        foreach (var edit in edits)
+        int delta = 0;
+        foreach (InlayHintEdit edit in edits)
         {
-            if (position >= edit.Start && position < edit.Start + edit.OldLength) return null;
-            if (edit.Start <= position) delta += edit.NewText.Length - edit.OldLength;
+            if (position >= edit.Start && position < edit.Start + edit.OldLength)
+            {
+                return null;
+            }
+
+            if (edit.Start <= position)
+            {
+                delta += edit.NewText.Length - edit.OldLength;
+            }
         }
         return position + delta;
     }
 
     private IReadOnlyList<ParameterHint> WithFallback(IReadOnlyList<ParameterHint> authoritative, HashSet<string>? changedSignatures = null)
     {
-        var result = authoritative.GroupBy(hint => (hint.Line, hint.Character)).ToDictionary(group => group.Key, group => group.First());
-        foreach (var call in syntax.Calls.Values)
+        Dictionary<(int Line, int Character), ParameterHint> result = authoritative.GroupBy(hint => (hint.Line, hint.Character)).ToDictionary(group => group.Key, group => group.First());
+        foreach (ShaderCallSyntax.Call call in syntax.Calls.Values)
         {
             if (changedSignatures?.Contains(call.Name) == true)
-                foreach (var argument in call.Arguments.Where(a => a.Tokens.Count > 0))
-                {
-                    var position = syntax.Hint(argument, "");
-                    result.Remove((position.Line, position.Character));
-                }
-            var local = syntax.Signatures.TryGetValue(call.Name, out var signatures);
-            if (!local) externalSignatures.TryGetValue(call.Name, out signatures);
-            if (signatures == null) continue;
-            var candidates = signatures.Where(s => s.Length >= call.Arguments.Count).ToArray();
-            if (call.Closed && candidates.Any(s => s.Length == call.Arguments.Count))
-                candidates = candidates.Where(s => s.Length == call.Arguments.Count).ToArray();
-            if (candidates.Length == 0) continue;
-            foreach (var argument in call.Arguments.Where(a => a.Tokens.Count > 0))
             {
-                var names = candidates.Select(s => s[argument.Index]).Distinct(StringComparer.Ordinal).ToArray();
-                if (names.Length != 1 || string.IsNullOrEmpty(names[0])) continue;
-                var hint = syntax.Hint(argument, names[0] + ":");
-                var key = (hint.Line, hint.Character);
-                if (!result.ContainsKey(key)) result[key] = hint;
+                foreach (ShaderCallSyntax.Argument? argument in call.Arguments.Where(a => a.Tokens.Count > 0))
+                {
+                    ParameterHint position = syntax.Hint(argument, "");
+                    _=result.Remove((position.Line, position.Character));
+                }
+            }
+
+            bool local = syntax.Signatures.TryGetValue(call.Name, out List<string[]>? signatures);
+            if (!local)
+            {
+                _=externalSignatures.TryGetValue(call.Name, out signatures);
+            }
+
+            if (signatures == null)
+            {
+                continue;
+            }
+
+            string[][] candidates = signatures.Where(s => s.Length >= call.Arguments.Count).ToArray();
+            if (call.Closed && candidates.Any(s => s.Length == call.Arguments.Count))
+            {
+                candidates = candidates.Where(s => s.Length == call.Arguments.Count).ToArray();
+            }
+
+            if (candidates.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (ShaderCallSyntax.Argument? argument in call.Arguments.Where(a => a.Tokens.Count > 0))
+            {
+                string[] names = candidates.Select(s => s[argument.Index]).Distinct(StringComparer.Ordinal).ToArray();
+                if (names.Length != 1 || string.IsNullOrEmpty(names[0]))
+                {
+                    continue;
+                }
+
+                ParameterHint hint = syntax.Hint(argument, names[0] + ":");
+                (int Line, int Character) key = (hint.Line, hint.Character);
+                if (!result.ContainsKey(key))
+                {
+                    result[key] = hint;
+                }
             }
         }
         return result.Values.Where(h => h.Label.Length <= 128).Take(2048).ToArray();
@@ -150,43 +206,60 @@ public sealed class InlayHintCache
     {
         syntax = new ShaderCallSyntax(text);
         Version = version;
-        var combined = incoming.ToList();
-        var occupied = new HashSet<(int, int)>(incoming.Select(h => (h.Line, h.Character)));
+        List<ParameterHint> combined = incoming.ToList();
+        HashSet<(int, int)> occupied = [.. incoming.Select(h => (h.Line, h.Character))];
         // The server omits incomplete call expressions. Keep their known argument labels.
-        foreach (var hint in Hints)
+        foreach (ParameterHint hint in Hints)
         {
-            if (occupied.Contains((hint.Line, hint.Character))) continue;
-            var offset = syntax.Offset(hint.Line, hint.Character);
-            if (syntax.ArgumentsByStart.TryGetValue(offset, out var current) &&
-                (!current.Call.Closed || current.Call.Arguments.Any(a => a.Tokens.Count == 0))) combined.Add(hint);
+            if (occupied.Contains((hint.Line, hint.Character)))
+            {
+                continue;
+            }
+
+            int offset = syntax.Offset(hint.Line, hint.Character);
+            if (syntax.ArgumentsByStart.TryGetValue(offset, out (ShaderCallSyntax.Call Call, ShaderCallSyntax.Argument Argument) current) &&
+                (!current.Call.Closed || current.Call.Arguments.Any(a => a.Tokens.Count == 0)))
+            {
+                combined.Add(hint);
+            }
         }
         return Merge(WithFallback(combined));
     }
 
     private IReadOnlyList<int> Merge(IReadOnlyList<ParameterHint> incoming)
     {
-        var previous = new Dictionary<(int, int, string, bool, bool), Queue<ParameterHint>>();
-        foreach (var hint in Hints)
+        Dictionary<(int, int, string, bool, bool), Queue<ParameterHint>> previous = [];
+        foreach (ParameterHint hint in Hints)
         {
-            if (!previous.TryGetValue(hint.Key, out var matches))
+            if (!previous.TryGetValue(hint.Key, out Queue<ParameterHint>? matches))
+            {
                 previous.Add(hint.Key, matches = new Queue<ParameterHint>());
+            }
+
             matches.Enqueue(hint);
         }
 
-        var changedLines = new HashSet<int>();
-        var merged = new List<ParameterHint>(incoming.Count);
-        foreach (var hint in incoming)
+        HashSet<int> changedLines = [];
+        List<ParameterHint> merged = new List<ParameterHint>(incoming.Count);
+        foreach (ParameterHint hint in incoming)
         {
-            if (previous.TryGetValue(hint.Key, out var matches) && matches.Count > 0)
+            if (previous.TryGetValue(hint.Key, out Queue<ParameterHint>? matches) && matches.Count > 0)
+            {
                 merged.Add(matches.Dequeue());
+            }
             else
             {
                 merged.Add(hint);
-                changedLines.Add(hint.Line);
+                _=changedLines.Add(hint.Line);
             }
         }
-        foreach (var matches in previous.Values)
-            foreach (var removed in matches) changedLines.Add(removed.Line);
+        foreach (Queue<ParameterHint> matches in previous.Values)
+        {
+            foreach (ParameterHint removed in matches)
+            {
+                _=changedLines.Add(removed.Line);
+            }
+        }
 
         Hints = merged.OrderBy(hint => hint.Line).ThenBy(hint => hint.Character).ToArray();
         return changedLines.OrderBy(line => line).ToArray();
@@ -197,7 +270,11 @@ public readonly struct InlayHintEdit
 {
     public InlayHintEdit(int start, int oldLength, string newText)
     {
-        if (start < 0 || oldLength < 0) throw new ArgumentOutOfRangeException(nameof(start));
+        if (start < 0 || oldLength < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(start));
+        }
+
         Start = start;
         OldLength = oldLength;
         NewText = newText ?? throw new ArgumentNullException(nameof(newText));
@@ -215,7 +292,11 @@ public sealed class ParameterHint
 
     internal ParameterHint(int line, int character, string label, bool paddingLeft, bool paddingRight, object identity)
     {
-        if (line < 0 || character < 0) throw new ArgumentOutOfRangeException(nameof(line));
+        if (line < 0 || character < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(line));
+        }
+
         Line = line;
         Character = character;
         Label = label ?? throw new ArgumentNullException(nameof(label));

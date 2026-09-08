@@ -1,8 +1,8 @@
+using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Threading;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.VisualStudio.Threading;
 
 namespace ShaderTools.VisualStudio.Services
 {
@@ -16,19 +16,33 @@ namespace ShaderTools.VisualStudio.Services
 
         public static void Run(Func<Task> operation, string name)
         {
-            if (Lifetime.IsCancellationRequested) return;
+            if (Lifetime.IsCancellationRequested)
+            {
+                return;
+            }
+
             Factory.RunAsync(async () =>
             {
-                try { if (!Lifetime.IsCancellationRequested) await operation(); }
+                try
+                {
+                    if (!Lifetime.IsCancellationRequested)
+                    {
+                        await operation();
+                    }
+                }
                 catch (OperationCanceledException) when (Lifetime.IsCancellationRequested) { }
             }).FileAndForget(name);
         }
 
         public static void Stop()
         {
-            if (Lifetime.IsCancellationRequested) return;
+            if (Lifetime.IsCancellationRequested)
+            {
+                return;
+            }
+
             Lifetime.Cancel();
-            Factory.Run(() => Tasks.JoinTillEmptyAsync());
+            Factory.Run(Tasks.JoinTillEmptyAsync);
         }
     }
 }

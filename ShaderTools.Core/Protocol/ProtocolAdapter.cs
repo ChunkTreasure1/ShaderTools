@@ -1,6 +1,6 @@
+using Newtonsoft.Json.Linq;
 using System;
 using System.IO;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.Core.Protocol
 {
@@ -18,44 +18,54 @@ namespace ShaderTools.Core.Protocol
             this.configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             this.log = log ?? (_ => { });
         }
-        public string WorkspaceRoot { get { lock (gate) return workspaceRoot; } }
+        public string WorkspaceRoot { get { lock (gate) { return workspaceRoot; } } }
 
         public JObject AdaptClientMessage(JObject message)
         {
             lock (gate)
             {
-                var result = (JObject)message.DeepClone();
+                JObject result = (JObject)message.DeepClone();
                 switch ((string?)result["method"])
                 {
                     case "initialize":
-                        var parameters = Object(result, "params");
+                        JObject parameters = Object(result, "params");
                         if (string.IsNullOrEmpty(workspaceRoot))
                         {
-                            var root = (string?)parameters["rootUri"] ?? (string?)parameters.SelectToken("workspaceFolders[0].uri");
-                            if (Uri.TryCreate(root, UriKind.Absolute, out Uri uri) && uri.IsFile) workspaceRoot = uri.LocalPath;
-                            else workspaceRoot = (string?)parameters["rootPath"] ?? "";
+                            string? root = (string?)parameters["rootUri"] ?? (string?)parameters.SelectToken("workspaceFolders[0].uri");
+                            if (Uri.TryCreate(root, UriKind.Absolute, out Uri uri) && uri.IsFile)
+                            {
+                                workspaceRoot = uri.LocalPath;
+                            }
+                            else
+                            {
+                                workspaceRoot = (string?)parameters["rootPath"] ?? "";
+                            }
                         }
                         if (!string.IsNullOrEmpty(workspaceRoot))
                         {
-                            var uri = new Uri(Path.GetFullPath(workspaceRoot)).AbsoluteUri;
+                            string uri = new Uri(Path.GetFullPath(workspaceRoot)).AbsoluteUri;
                             parameters["rootUri"] = uri;
                             parameters["rootPath"] = workspaceRoot;
                             parameters["workspaceFolders"] = new JArray(new JObject { ["uri"] = uri, ["name"] = Path.GetFileName(workspaceRoot.TrimEnd(Path.DirectorySeparatorChar)) });
                         }
-                        var capabilities = Object(parameters, "capabilities");
+                        JObject capabilities = Object(parameters, "capabilities");
                         Object(capabilities, "workspace")["configuration"] = true;
                         Object(capabilities, "window")["workDoneProgress"] = false;
                         Object(Object(Object(capabilities, "textDocument"), "publishDiagnostics"), "tagSupport")["valueSet"] = new JArray(1, 2);
                         break;
                     case "textDocument/didOpen":
-                        var document = result.SelectToken("params.textDocument") as JObject;
-                        if (document != null)
+                        if (result.SelectToken("params.textDocument") is JObject document)
                         {
                             string language = (string?)document["languageId"] ?? "";
                             if (language.StartsWith("shader-tools-", StringComparison.OrdinalIgnoreCase))
+                            {
                                 document["languageId"] = language.Substring("shader-tools-".Length).ToLowerInvariant();
+                            }
+
                             if (string.IsNullOrEmpty(workspaceRoot) && Uri.TryCreate((string?)document["uri"], UriKind.Absolute, out Uri file) && file.IsFile)
+                            {
                                 workspaceRoot = FindWorkspaceRoot(file.LocalPath);
+                            }
                         }
                         break;
                     case "textDocument/didChangeShaderVariant":
@@ -68,22 +78,28 @@ namespace ShaderTools.Core.Protocol
 
         public JObject? GetServerRequestResponse(JObject message)
         {
-            if (message["id"] == null || message["method"] == null) return null;
+            if (message["id"] == null || message["method"] == null)
+            {
+                return null;
+            }
+
             JToken value;
             switch ((string?)message["method"])
             {
                 case "workspace/configuration":
                     JObject settings = configuration(WorkspaceRoot);
-                    var values = new JArray();
-                    foreach (var item in message.SelectToken("params.items") as JArray ?? new JArray())
+                    JArray values = [];
+                    foreach (JToken item in message.SelectToken("params.items") as JArray ?? [])
                     {
                         string? section = (string?)item["section"];
-                        JToken? selected = section == null || section == "shader-validator" ? settings : null;
+                        JToken? selected = section is null or "shader-validator" ? settings : null;
                         if (section != null && section.StartsWith("shader-validator.", StringComparison.Ordinal))
                         {
                             selected = settings;
                             foreach (string part in section.Substring("shader-validator.".Length).Split('.'))
+                            {
                                 selected = (selected as JObject)?[part];
+                            }
                         }
                         values.Add(selected?.DeepClone() ?? JValue.CreateNull());
                     }
@@ -91,7 +107,11 @@ namespace ShaderTools.Core.Protocol
                     log("Applied shader configuration for " + WorkspaceRoot);
                     break;
                 case "textDocument/shaderVariant":
-                    lock (gate) value = new JObject { ["shaderVariant"] = activeVariant?.DeepClone() ?? JValue.CreateNull() };
+                    lock (gate)
+                    {
+                        value = new JObject { ["shaderVariant"] = activeVariant?.DeepClone() ?? JValue.CreateNull() };
+                    }
+
                     break;
                 case "window/workDoneProgress/create":
                     value = JValue.CreateNull();
@@ -103,17 +123,27 @@ namespace ShaderTools.Core.Protocol
 
         private static JObject Object(JObject parent, string name)
         {
-            if (parent[name] is JObject existing) return existing;
-            var created = new JObject();
+            if (parent[name] is JObject existing)
+            {
+                return existing;
+            }
+
+            JObject created = [];
             parent[name] = created;
             return created;
         }
 
         public static string FindWorkspaceRoot(string filePath)
         {
-            var directory = new DirectoryInfo(Path.GetDirectoryName(filePath)!);
-            for (var current = directory; current != null; current = current.Parent)
-                if (File.Exists(Path.Combine(current.FullName, ".shadertools.json"))) return current.FullName;
+            DirectoryInfo directory = new DirectoryInfo(Path.GetDirectoryName(filePath)!);
+            for (DirectoryInfo current = directory; current != null; current = current.Parent)
+            {
+                if (File.Exists(Path.Combine(current.FullName, ".shadertools.json")))
+                {
+                    return current.FullName;
+                }
+            }
+
             return directory.FullName;
         }
     }

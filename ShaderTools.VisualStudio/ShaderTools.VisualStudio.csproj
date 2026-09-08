@@ -136,9 +136,7 @@
   <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="'$(VSToolsPath)' != ''" />
   <!-- VSSDK can reuse a detokenized manifest after metadata-only changes.
        Invalidate that generated file when the source manifest is newer. -->
-  <Target Name="RefreshChangedVsixManifest" BeforeTargets="DetokenizeVsixManifestFile"
-          Inputs="source.extension.vsixmanifest" Outputs="$(IntermediateVsixManifest)"
-          Condition="'$(DesignTimeBuild)' != 'true'">
+  <Target Name="RefreshChangedVsixManifest" BeforeTargets="DetokenizeVsixManifestFile" Inputs="source.extension.vsixmanifest" Outputs="$(IntermediateVsixManifest)" Condition="'$(DesignTimeBuild)' != 'true'">
     <Delete Files="$(IntermediateVsixManifest)" />
   </Target>
   <Target Name="VerifyShaderServer" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">

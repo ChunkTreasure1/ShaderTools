@@ -1,10 +1,10 @@
+using Microsoft.VisualStudio.LanguageServer.Client;
+using Microsoft.VisualStudio.Utilities;
+using ShaderTools.VisualStudio.Options;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.IO;
-using ShaderTools.VisualStudio.Options;
-using Microsoft.VisualStudio.LanguageServer.Client;
-using Microsoft.VisualStudio.Utilities;
 
 namespace ShaderTools.VisualStudio.LanguageClient
 {
@@ -24,9 +24,21 @@ namespace ShaderTools.VisualStudio.LanguageClient
         public static string ForPath(string path)
         {
             string extension = Path.GetExtension(path ?? "");
-            if (GlslExtensions.Contains(extension)) return Glsl;
-            if (ShaderOptions.Current.EnableHlsl && (extension.Equals(".hlsl", StringComparison.OrdinalIgnoreCase) || extension.Equals(".hlsli", StringComparison.OrdinalIgnoreCase) || extension.Equals(".fx", StringComparison.OrdinalIgnoreCase) || extension.Equals(".fxh", StringComparison.OrdinalIgnoreCase))) return Hlsl;
-            if (ShaderOptions.Current.EnableWgsl && extension.Equals(".wgsl", StringComparison.OrdinalIgnoreCase)) return Wgsl;
+            if (GlslExtensions.Contains(extension))
+            {
+                return Glsl;
+            }
+
+            if (ShaderOptions.Current.EnableHlsl && (extension.Equals(".hlsl", StringComparison.OrdinalIgnoreCase) || extension.Equals(".hlsli", StringComparison.OrdinalIgnoreCase) || extension.Equals(".fx", StringComparison.OrdinalIgnoreCase) || extension.Equals(".fxh", StringComparison.OrdinalIgnoreCase)))
+            {
+                return Hlsl;
+            }
+
+            if (ShaderOptions.Current.EnableWgsl && extension.Equals(".wgsl", StringComparison.OrdinalIgnoreCase))
+            {
+                return Wgsl;
+            }
+
             return null;
         }
     }

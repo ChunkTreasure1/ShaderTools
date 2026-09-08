@@ -1,9 +1,9 @@
+using Microsoft.VisualStudio.Shell;
 using ShaderTools.VisualStudio.Commands;
 using ShaderTools.VisualStudio.LanguageClient;
 using ShaderTools.VisualStudio.Options;
 using ShaderTools.VisualStudio.Services;
 using ShaderTools.VisualStudio.ToolWindows;
-using Microsoft.VisualStudio.Shell;
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;

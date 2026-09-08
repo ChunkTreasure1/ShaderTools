@@ -1,9 +1,9 @@
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.Core.Protocol
 {
@@ -35,7 +35,7 @@ namespace ShaderTools.Core.Protocol
 
             lock (gate)
             {
-                var method = (string?)message["method"];
+                string? method = (string?)message["method"];
                 if (method == null)
                 {
                     return;
@@ -61,9 +61,9 @@ namespace ShaderTools.Core.Protocol
                         return;
                 }
 
-                var parameters = message["params"] as JObject;
-                var uri = (string?)parameters?.SelectToken("textDocument.uri");
-                var text = GetText(uri, null);
+                JObject? parameters = message["params"] as JObject;
+                string? uri = (string?)parameters?.SelectToken("textDocument.uri");
+                string? text = GetText(uri, null);
                 if (message["id"] != null && NeedsResponseConversion(method))
                 {
                     AddPending(message["id"]!, new RequestContext(method, NormalizeUri(uri), text));
@@ -82,7 +82,7 @@ namespace ShaderTools.Core.Protocol
 
             lock (gate)
             {
-                var method = (string?)message["method"];
+                string? method = (string?)message["method"];
                 if (method != null)
                 {
                     ProcessServerNotificationOrRequest(method, message);
@@ -94,14 +94,14 @@ namespace ShaderTools.Core.Protocol
                     return;
                 }
 
-                var key = RequestKey(message["id"]!);
-                if (!pendingRequests.TryGetValue(key, out var context))
+                string key = RequestKey(message["id"]!);
+                if (!pendingRequests.TryGetValue(key, out RequestContext? context))
                 {
                     return;
                 }
 
                 RemovePendingKey(key);
-                var result = message["result"];
+                JToken? result = message["result"];
                 if (result == null || result.Type == JTokenType.Null)
                 {
                     return;
@@ -113,9 +113,9 @@ namespace ShaderTools.Core.Protocol
 
         private void ProcessDidOpen(JObject message)
         {
-            var document = message.SelectToken("params.textDocument") as JObject;
-            var uri = NormalizeUri((string?)document?["uri"]);
-            var text = (string?)document?["text"];
+            JObject? document = message.SelectToken("params.textDocument") as JObject;
+            string? uri = NormalizeUri((string?)document?["uri"]);
+            string? text = (string?)document?["text"];
             if (uri == null || text == null)
             {
                 return;
@@ -126,33 +126,31 @@ namespace ShaderTools.Core.Protocol
 
         private void ProcessDidChange(JObject message)
         {
-            var parameters = message["params"] as JObject;
-            var uri = NormalizeUri((string?)parameters?.SelectToken("textDocument.uri"));
-            var changes = parameters?["contentChanges"] as JArray;
-            if (uri == null || changes == null)
+            JObject? parameters = message["params"] as JObject;
+            string? uri = NormalizeUri((string?)parameters?.SelectToken("textDocument.uri"));
+            if (uri == null || parameters?["contentChanges"] is not JArray changes)
             {
                 return;
             }
 
-            openDocuments.TryGetValue(uri, out var workingText);
-            var convertedChanges = (JArray)changes.DeepClone();
-            for (var index = 0; index < changes.Count; index++)
+            _=openDocuments.TryGetValue(uri, out string? workingText);
+            JArray convertedChanges = (JArray)changes.DeepClone();
+            for (int index = 0; index < changes.Count; index++)
             {
-                if (!(changes[index] is JObject original) || !(convertedChanges[index] is JObject converted))
+                if (changes[index] is not JObject original || convertedChanges[index] is not JObject converted)
                 {
                     InvalidateOpenDocument(uri);
                     return;
                 }
 
-                var replacement = (string?)original["text"];
+                string? replacement = (string?)original["text"];
                 if (replacement == null)
                 {
                     InvalidateOpenDocument(uri);
                     return;
                 }
 
-                var originalRange = original["range"] as JObject;
-                if (originalRange == null)
+                if (original["range"] is not JObject originalRange)
                 {
                     if (original["range"] != null && original["range"]!.Type != JTokenType.Null)
                     {
@@ -164,7 +162,7 @@ namespace ShaderTools.Core.Protocol
                     continue;
                 }
 
-                if (workingText == null || !(converted["range"] is JObject convertedRange))
+                if (workingText == null || converted["range"] is not JObject convertedRange)
                 {
                     InvalidateOpenDocument(uri);
                     return;
@@ -187,15 +185,15 @@ namespace ShaderTools.Core.Protocol
 
         private void ProcessDidClose(JObject message)
         {
-            var uri = NormalizeUri((string?)message.SelectToken("params.textDocument.uri"));
+            string? uri = NormalizeUri((string?)message.SelectToken("params.textDocument.uri"));
             if (uri == null)
             {
                 return;
             }
 
-            openDocuments.Remove(uri);
-            var removals = new List<string>();
-            foreach (var pair in pendingRequests)
+            _=openDocuments.Remove(uri);
+            List<string> removals = [];
+            foreach (KeyValuePair<string, RequestContext> pair in pendingRequests)
             {
                 if (string.Equals(pair.Value.Uri, uri, StringComparison.OrdinalIgnoreCase))
                 {
@@ -203,7 +201,7 @@ namespace ShaderTools.Core.Protocol
                 }
             }
 
-            foreach (var key in removals)
+            foreach (string key in removals)
             {
                 RemovePendingKey(key);
             }
@@ -230,16 +228,16 @@ namespace ShaderTools.Core.Protocol
                 case "textDocument/rename":
                 case "textDocument/prepareRename":
                 case "textDocument/onTypeFormatting":
-                    TryConvertPosition(parameters["position"] as JObject, text, toServer: true);
+                    _=TryConvertPosition(parameters["position"] as JObject, text, toServer: true);
                     break;
                 case "textDocument/rangeFormatting":
                 case "textDocument/inlayHint":
                 case "textDocument/semanticTokens/range":
                 case "textDocument/colorPresentation":
-                    TryConvertRange(parameters["range"] as JObject, text, toServer: true);
+                    _=TryConvertRange(parameters["range"] as JObject, text, toServer: true);
                     break;
                 case "textDocument/codeAction":
-                    TryConvertRange(parameters["range"] as JObject, text, toServer: true);
+                    _=TryConvertRange(parameters["range"] as JObject, text, toServer: true);
                     ConvertDiagnostics(parameters.SelectToken("context.diagnostics") as JArray, null, text, null, toServer: true);
                     break;
                 case "textDocument/selectionRange":
@@ -253,7 +251,7 @@ namespace ShaderTools.Core.Protocol
             switch (method)
             {
                 case "textDocument/publishDiagnostics":
-                    var uri = (string?)message.SelectToken("params.uri");
+                    string? uri = (string?)message.SelectToken("params.uri");
                     ConvertDiagnostics(
                         message.SelectToken("params.diagnostics") as JArray,
                         uri,
@@ -268,14 +266,14 @@ namespace ShaderTools.Core.Protocol
 
         private void ConvertServerResult(RequestContext context, JToken result)
         {
-            var text = context.Text ?? GetText(context.Uri, context);
+            string? text = context.Text ?? GetText(context.Uri, context);
             switch (context.Method)
             {
                 case "textDocument/completion":
                     ConvertCompletion(result, text);
                     break;
                 case "textDocument/hover":
-                    TryConvertRange((result as JObject)?["range"] as JObject, text, toServer: false);
+                    _=TryConvertRange((result as JObject)?["range"] as JObject, text, toServer: false);
                     break;
                 case "textDocument/foldingRange":
                     ConvertFoldingRanges(result as JArray, text);
@@ -309,11 +307,11 @@ namespace ShaderTools.Core.Protocol
                     {
                         if (prepareResult["start"] != null)
                         {
-                            TryConvertRange(prepareResult, text, toServer: false);
+                            _=TryConvertRange(prepareResult, text, toServer: false);
                         }
                         else
                         {
-                            TryConvertRange(prepareResult["range"] as JObject, text, toServer: false);
+                            _=TryConvertRange(prepareResult["range"] as JObject, text, toServer: false);
                         }
                     }
                     break;
@@ -350,38 +348,11 @@ namespace ShaderTools.Core.Protocol
 
         private static bool NeedsResponseConversion(string method)
         {
-            switch (method)
+            return method switch
             {
-                case "textDocument/completion":
-                case "textDocument/hover":
-                case "textDocument/foldingRange":
-                case "textDocument/inlayHint":
-                case "textDocument/documentSymbol":
-                case "workspace/symbol":
-                case "textDocument/definition":
-                case "textDocument/declaration":
-                case "textDocument/typeDefinition":
-                case "textDocument/implementation":
-                case "textDocument/references":
-                case "textDocument/documentHighlight":
-                case "textDocument/formatting":
-                case "textDocument/rangeFormatting":
-                case "textDocument/onTypeFormatting":
-                case "textDocument/prepareRename":
-                case "textDocument/rename":
-                case "textDocument/selectionRange":
-                case "textDocument/codeAction":
-                case "textDocument/documentColor":
-                case "textDocument/colorPresentation":
-                case "textDocument/documentLink":
-                case "textDocument/diagnostic":
-                case "workspace/diagnostic":
-                case "textDocument/semanticTokens/full":
-                case "textDocument/semanticTokens/range":
-                    return true;
-                default:
-                    return false;
-            }
+                "textDocument/completion"or"textDocument/hover"or"textDocument/foldingRange"or"textDocument/inlayHint"or"textDocument/documentSymbol"or"workspace/symbol"or"textDocument/definition"or"textDocument/declaration"or"textDocument/typeDefinition"or"textDocument/implementation"or"textDocument/references"or"textDocument/documentHighlight"or"textDocument/formatting"or"textDocument/rangeFormatting"or"textDocument/onTypeFormatting"or"textDocument/prepareRename"or"textDocument/rename"or"textDocument/selectionRange"or"textDocument/codeAction"or"textDocument/documentColor"or"textDocument/colorPresentation"or"textDocument/documentLink"or"textDocument/diagnostic"or"workspace/diagnostic"or"textDocument/semanticTokens/full"or"textDocument/semanticTokens/range" => true,
+                _ => false,
+            };
         }
 
         private void ConvertCompletion(JToken result, string? text)
@@ -391,10 +362,10 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            var items = result as JArray ?? (result as JObject)?["items"] as JArray;
+            JArray? items = result as JArray ?? (result as JObject)?["items"] as JArray;
             if (items != null)
             {
-                foreach (var item in items)
+                foreach (JToken item in items)
                 {
                     if (item is JObject completion)
                     {
@@ -404,7 +375,7 @@ namespace ShaderTools.Core.Protocol
                 }
             }
 
-            var defaults = (result as JObject)?["itemDefaults"] as JObject;
+            JObject? defaults = (result as JObject)?["itemDefaults"] as JObject;
             ConvertCompletionEdit(defaults?["editRange"] as JObject, text);
         }
 
@@ -417,13 +388,13 @@ namespace ShaderTools.Core.Protocol
 
             if (edit["start"] != null)
             {
-                TryConvertRange(edit, text, toServer: false);
+                _=TryConvertRange(edit, text, toServer: false);
             }
             else
             {
-                TryConvertRange(edit["range"] as JObject, text, toServer: false);
-                TryConvertRange(edit["insert"] as JObject, text, toServer: false);
-                TryConvertRange(edit["replace"] as JObject, text, toServer: false);
+                _=TryConvertRange(edit["range"] as JObject, text, toServer: false);
+                _=TryConvertRange(edit["insert"] as JObject, text, toServer: false);
+                _=TryConvertRange(edit["replace"] as JObject, text, toServer: false);
             }
         }
 
@@ -434,9 +405,9 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in ranges)
+            foreach (JToken token in ranges)
             {
-                if (!(token is JObject range))
+                if (token is not JObject range)
                 {
                     continue;
                 }
@@ -453,18 +424,18 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in hints)
+            foreach (JToken token in hints)
             {
-                if (!(token is JObject hint))
+                if (token is not JObject hint)
                 {
                     continue;
                 }
 
-                TryConvertPosition(hint["position"] as JObject, text, toServer: false);
+                _=TryConvertPosition(hint["position"] as JObject, text, toServer: false);
                 ConvertTextEdits(hint["textEdits"] as JArray, text);
                 if (hint["label"] is JArray labelParts)
                 {
-                    foreach (var labelToken in labelParts)
+                    foreach (JToken labelToken in labelParts)
                     {
                         if (labelToken is JObject label && label["location"] is JObject location)
                         {
@@ -482,9 +453,9 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in symbols)
+            foreach (JToken token in symbols)
             {
-                if (!(token is JObject symbol))
+                if (token is not JObject symbol)
                 {
                     continue;
                 }
@@ -495,8 +466,8 @@ namespace ShaderTools.Core.Protocol
                 }
                 else if (text != null)
                 {
-                    TryConvertRange(symbol["range"] as JObject, text, toServer: false);
-                    TryConvertRange(symbol["selectionRange"] as JObject, text, toServer: false);
+                    _=TryConvertRange(symbol["range"] as JObject, text, toServer: false);
+                    _=TryConvertRange(symbol["selectionRange"] as JObject, text, toServer: false);
                 }
 
                 ConvertDocumentSymbols(symbol["children"] as JArray, text, context);
@@ -510,7 +481,7 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in symbols)
+            foreach (JToken token in symbols)
             {
                 if (token is JObject symbol && symbol["location"] is JObject location)
                 {
@@ -523,7 +494,7 @@ namespace ShaderTools.Core.Protocol
         {
             if (result is JArray locations)
             {
-                foreach (var token in locations)
+                foreach (JToken token in locations)
                 {
                     if (token is JObject location)
                     {
@@ -541,17 +512,17 @@ namespace ShaderTools.Core.Protocol
         {
             if (location["targetUri"] != null)
             {
-                TryConvertRange(location["originSelectionRange"] as JObject, sourceText, toServer: false);
-                var targetUri = (string?)location["targetUri"];
-                var targetText = GetText(targetUri, context);
-                TryConvertRange(location["targetRange"] as JObject, targetText, toServer: false);
-                TryConvertRange(location["targetSelectionRange"] as JObject, targetText, toServer: false);
+                _=TryConvertRange(location["originSelectionRange"] as JObject, sourceText, toServer: false);
+                string? targetUri = (string?)location["targetUri"];
+                string? targetText = GetText(targetUri, context);
+                _=TryConvertRange(location["targetRange"] as JObject, targetText, toServer: false);
+                _=TryConvertRange(location["targetSelectionRange"] as JObject, targetText, toServer: false);
                 return;
             }
 
-            var uri = (string?)location["uri"];
-            var text = GetText(uri, context);
-            TryConvertRange(location["range"] as JObject, text, toServer: false);
+            string? uri = (string?)location["uri"];
+            string? text = GetText(uri, context);
+            _=TryConvertRange(location["range"] as JObject, text, toServer: false);
         }
 
         private static void ConvertTextEdits(JArray? edits, string? text)
@@ -561,11 +532,11 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in edits)
+            foreach (JToken token in edits)
             {
                 if (token is JObject edit)
                 {
-                    TryConvertRange(edit["range"] as JObject, text, toServer: false);
+                    _=TryConvertRange(edit["range"] as JObject, text, toServer: false);
                 }
             }
         }
@@ -577,11 +548,11 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in values)
+            foreach (JToken token in values)
             {
                 if (token is JObject value)
                 {
-                    TryConvertRange(value[propertyName] as JObject, text, toServer: false);
+                    _=TryConvertRange(value[propertyName] as JObject, text, toServer: false);
                 }
             }
         }
@@ -593,9 +564,9 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in positions)
+            foreach (JToken token in positions)
             {
-                TryConvertPosition(token as JObject, text, toServer);
+                _=TryConvertPosition(token as JObject, text, toServer);
             }
         }
 
@@ -606,12 +577,12 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in values)
+            foreach (JToken token in values)
             {
-                var current = token as JObject;
+                JObject? current = token as JObject;
                 while (current != null)
                 {
-                    TryConvertRange(current["range"] as JObject, text, toServer: false);
+                    _=TryConvertRange(current["range"] as JObject, text, toServer: false);
                     current = current["parent"] as JObject;
                 }
             }
@@ -624,9 +595,9 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in actions)
+            foreach (JToken token in actions)
             {
-                if (!(token is JObject action))
+                if (token is not JObject action)
                 {
                     continue;
                 }
@@ -643,13 +614,13 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            foreach (var token in presentations)
+            foreach (JToken token in presentations)
             {
                 if (token is JObject presentation)
                 {
                     if (presentation["textEdit"] is JObject textEdit)
                     {
-                        TryConvertRange(textEdit["range"] as JObject, text, toServer: false);
+                        _=TryConvertRange(textEdit["range"] as JObject, text, toServer: false);
                     }
 
                     ConvertTextEdits(presentation["additionalTextEdits"] as JArray, text);
@@ -666,7 +637,7 @@ namespace ShaderTools.Core.Protocol
 
             if (edit["changes"] is JObject changes)
             {
-                foreach (var property in changes.Properties())
+                foreach (JProperty property in changes.Properties())
                 {
                     ConvertTextEdits(property.Value as JArray, GetText(property.Name, context));
                 }
@@ -674,11 +645,11 @@ namespace ShaderTools.Core.Protocol
 
             if (edit["documentChanges"] is JArray documentChanges)
             {
-                foreach (var token in documentChanges)
+                foreach (JToken token in documentChanges)
                 {
                     if (token is JObject documentEdit)
                     {
-                        var uri = (string?)documentEdit.SelectToken("textDocument.uri");
+                        string? uri = (string?)documentEdit.SelectToken("textDocument.uri");
                         ConvertTextEdits(documentEdit["edits"] as JArray, GetText(uri, context));
                     }
                 }
@@ -692,26 +663,26 @@ namespace ShaderTools.Core.Protocol
                 return;
             }
 
-            var documentText = text ?? GetText(uri, context);
+            string? documentText = text ?? GetText(uri, context);
 
-            foreach (var token in diagnostics)
+            foreach (JToken token in diagnostics)
             {
-                if (!(token is JObject diagnostic))
+                if (token is not JObject diagnostic)
                 {
                     continue;
                 }
 
-                TryConvertRange(diagnostic["range"] as JObject, documentText, toServer);
+                _=TryConvertRange(diagnostic["range"] as JObject, documentText, toServer);
                 if (diagnostic["relatedInformation"] is JArray relatedInformation)
                 {
-                    foreach (var relatedToken in relatedInformation)
+                    foreach (JToken relatedToken in relatedInformation)
                     {
                         if (relatedToken is JObject related && related["location"] is JObject location)
                         {
                             if (toServer)
                             {
-                                var relatedUri = (string?)location["uri"];
-                                TryConvertRange(location["range"] as JObject, GetText(relatedUri, context), toServer: true);
+                                string? relatedUri = (string?)location["uri"];
+                                _=TryConvertRange(location["range"] as JObject, GetText(relatedUri, context), toServer: true);
                             }
                             else
                             {
@@ -733,7 +704,7 @@ namespace ShaderTools.Core.Protocol
             ConvertDiagnostics(report["items"] as JArray, uri, GetText(uri, context), context);
             if (report["relatedDocuments"] is JObject related)
             {
-                foreach (var property in related.Properties())
+                foreach (JProperty property in related.Properties())
                 {
                     ConvertDocumentDiagnosticReport(property.Value as JObject, property.Name, context);
                 }
@@ -742,16 +713,16 @@ namespace ShaderTools.Core.Protocol
 
         private void ConvertWorkspaceDiagnosticReport(JObject? report, RequestContext context)
         {
-            if (!(report?["items"] is JArray items))
+            if (report?["items"] is not JArray items)
             {
                 return;
             }
 
-            foreach (var token in items)
+            foreach (JToken token in items)
             {
                 if (token is JObject documentReport)
                 {
-                    var uri = (string?)documentReport["uri"];
+                    string? uri = (string?)documentReport["uri"];
                     ConvertDiagnostics(documentReport["items"] as JArray, uri, GetText(uri, context), context);
                 }
             }
@@ -759,29 +730,29 @@ namespace ShaderTools.Core.Protocol
 
         private static void ConvertSemanticTokens(JObject? result, string? text)
         {
-            if (!(result?["data"] is JArray data) || text == null || data.Count % 5 != 0)
+            if (result?["data"] is not JArray data || text == null || data.Count % 5 != 0)
             {
                 return;
             }
 
-            var converted = (JArray)data.DeepClone();
-            var scalarLine = 0;
-            var scalarStart = 0;
-            var previousUtf16Line = 0;
-            var previousUtf16Start = 0;
-            for (var index = 0; index < data.Count; index += 5)
+            JArray converted = (JArray)data.DeepClone();
+            int scalarLine = 0;
+            int scalarStart = 0;
+            int previousUtf16Line = 0;
+            int previousUtf16Start = 0;
+            for (int index = 0; index < data.Count; index += 5)
             {
-                if (!TryReadNonNegativeInt(data[index], out var deltaLine) ||
-                    !TryReadNonNegativeInt(data[index + 1], out var deltaStart) ||
-                    !TryReadNonNegativeInt(data[index + 2], out var scalarLength))
+                if (!TryReadNonNegativeInt(data[index], out int deltaLine) ||
+                    !TryReadNonNegativeInt(data[index + 1], out int deltaStart) ||
+                    !TryReadNonNegativeInt(data[index + 2], out int scalarLength))
                 {
                     return;
                 }
 
                 scalarLine += deltaLine;
                 scalarStart = deltaLine == 0 ? scalarStart + deltaStart : deltaStart;
-                if (!TryScalarToUtf16(text, scalarLine, scalarStart, out var utf16Start) ||
-                    !TryUtf8LengthToUtf16(text, scalarLine, utf16Start, scalarLength, out var utf16Length))
+                if (!TryScalarToUtf16(text, scalarLine, scalarStart, out int utf16Start) ||
+                    !TryUtf8LengthToUtf16(text, scalarLine, utf16Start, scalarLength, out int utf16Length))
                 {
                     return;
                 }
@@ -799,16 +770,16 @@ namespace ShaderTools.Core.Protocol
         private static bool TryUtf8LengthToUtf16(string text, int line, int utf16Start, int utf8Length, out int utf16Length)
         {
             utf16Length = 0;
-            if (!TryGetLine(text, line, out var lineStart, out var lineLength) || utf16Start > lineLength)
+            if (!TryGetLine(text, line, out int lineStart, out int lineLength) || utf16Start > lineLength)
             {
                 return false;
             }
 
-            var offset = utf16Start;
-            var bytes = 0;
+            int offset = utf16Start;
+            int bytes = 0;
             while (bytes < utf8Length && offset < lineLength)
             {
-                var character = text[lineStart + offset];
+                char character = text[lineStart + offset];
                 int scalarBytes;
                 if (char.IsHighSurrogate(character))
                 {
@@ -843,13 +814,13 @@ namespace ShaderTools.Core.Protocol
 
         private static bool TryConvertRange(JObject? range, string? text, bool toServer)
         {
-            if (range == null || text == null || !(range["start"] is JObject start) || !(range["end"] is JObject end))
+            if (range == null || text == null || range["start"] is not JObject start || range["end"] is not JObject end)
             {
                 return false;
             }
 
-            if (!TryConvertedCharacter(start, text, toServer, out var convertedStart) ||
-                !TryConvertedCharacter(end, text, toServer, out var convertedEnd))
+            if (!TryConvertedCharacter(start, text, toServer, out int convertedStart) ||
+                !TryConvertedCharacter(end, text, toServer, out int convertedEnd))
             {
                 return false;
             }
@@ -861,7 +832,7 @@ namespace ShaderTools.Core.Protocol
 
         private static bool TryConvertPosition(JObject? position, string? text, bool toServer)
         {
-            if (position == null || text == null || !TryConvertedCharacter(position, text, toServer, out var converted))
+            if (position == null || text == null || !TryConvertedCharacter(position, text, toServer, out int converted))
             {
                 return false;
             }
@@ -873,8 +844,8 @@ namespace ShaderTools.Core.Protocol
         private static bool TryConvertedCharacter(JObject position, string text, bool toServer, out int converted)
         {
             converted = 0;
-            if (!TryReadNonNegativeInt(position["line"], out var line) ||
-                !TryReadNonNegativeInt(position["character"], out var character))
+            if (!TryReadNonNegativeInt(position["line"], out int line) ||
+                !TryReadNonNegativeInt(position["character"], out int character))
             {
                 return false;
             }
@@ -887,9 +858,9 @@ namespace ShaderTools.Core.Protocol
         private static void TryConvertLineCharacter(JObject range, string lineProperty, string characterProperty, string text)
         {
             if (range[characterProperty] == null ||
-                !TryReadNonNegativeInt(range[lineProperty], out var line) ||
-                !TryReadNonNegativeInt(range[characterProperty], out var character) ||
-                !TryScalarToUtf16(text, line, character, out var converted))
+                !TryReadNonNegativeInt(range[lineProperty], out int line) ||
+                !TryReadNonNegativeInt(range[characterProperty], out int character) ||
+                !TryScalarToUtf16(text, line, character, out int converted))
             {
                 return;
             }
@@ -900,7 +871,7 @@ namespace ShaderTools.Core.Protocol
         private static bool TryUtf16ToScalar(string text, int line, int utf16Character, out int scalarCharacter)
         {
             scalarCharacter = 0;
-            if (!TryGetLine(text, line, out var lineStart, out var lineLength) || utf16Character > lineLength)
+            if (!TryGetLine(text, line, out int lineStart, out int lineLength) || utf16Character > lineLength)
             {
                 return false;
             }
@@ -912,7 +883,7 @@ namespace ShaderTools.Core.Protocol
                 return false;
             }
 
-            var offset = 0;
+            int offset = 0;
             while (offset < utf16Character)
             {
                 if (offset + 1 < utf16Character &&
@@ -935,12 +906,12 @@ namespace ShaderTools.Core.Protocol
         private static bool TryScalarToUtf16(string text, int line, int scalarCharacter, out int utf16Character)
         {
             utf16Character = 0;
-            if (!TryGetLine(text, line, out var lineStart, out var lineLength))
+            if (!TryGetLine(text, line, out int lineStart, out int lineLength))
             {
                 return false;
             }
 
-            var scalar = 0;
+            int scalar = 0;
             while (utf16Character < lineLength && scalar < scalarCharacter)
             {
                 if (utf16Character + 1 < lineLength &&
@@ -963,9 +934,9 @@ namespace ShaderTools.Core.Protocol
         private static bool TryApplyUtf16Edit(string text, JObject range, string replacement, out string updated)
         {
             updated = text;
-            if (!(range["start"] is JObject start) || !(range["end"] is JObject end) ||
-                !TryAbsoluteUtf16Offset(text, start, out var startOffset) ||
-                !TryAbsoluteUtf16Offset(text, end, out var endOffset) ||
+            if (range["start"] is not JObject start || range["end"] is not JObject end ||
+                !TryAbsoluteUtf16Offset(text, start, out int startOffset) ||
+                !TryAbsoluteUtf16Offset(text, end, out int endOffset) ||
                 endOffset < startOffset)
             {
                 return false;
@@ -978,9 +949,9 @@ namespace ShaderTools.Core.Protocol
         private static bool TryAbsoluteUtf16Offset(string text, JObject position, out int offset)
         {
             offset = 0;
-            if (!TryReadNonNegativeInt(position["line"], out var line) ||
-                !TryReadNonNegativeInt(position["character"], out var character) ||
-                !TryGetLine(text, line, out var lineStart, out var lineLength) ||
+            if (!TryReadNonNegativeInt(position["line"], out int line) ||
+                !TryReadNonNegativeInt(position["character"], out int character) ||
+                !TryGetLine(text, line, out int lineStart, out int lineLength) ||
                 character > lineLength)
             {
                 return false;
@@ -1001,10 +972,10 @@ namespace ShaderTools.Core.Protocol
         {
             start = 0;
             length = 0;
-            var line = 0;
+            int line = 0;
             while (line < requestedLine)
             {
-                var newline = text.IndexOf('\n', start);
+                int newline = text.IndexOf('\n', start);
                 if (newline < 0)
                 {
                     return false;
@@ -1014,7 +985,7 @@ namespace ShaderTools.Core.Protocol
                 line++;
             }
 
-            var end = text.IndexOf('\n', start);
+            int end = text.IndexOf('\n', start);
             if (end < 0)
             {
                 end = text.Length;
@@ -1037,8 +1008,8 @@ namespace ShaderTools.Core.Protocol
                 return false;
             }
 
-            var number = token.Value<long>();
-            if (number < 0 || number > int.MaxValue)
+            long number = token.Value<long>();
+            if (number is <0 or >int.MaxValue)
             {
                 return false;
             }
@@ -1049,7 +1020,7 @@ namespace ShaderTools.Core.Protocol
 
         private string? GetText(string? uri, RequestContext? context)
         {
-            var normalized = NormalizeUri(uri);
+            string? normalized = NormalizeUri(uri);
             if (normalized == null)
             {
                 return null;
@@ -1060,7 +1031,7 @@ namespace ShaderTools.Core.Protocol
                 return context.Text;
             }
 
-            if (openDocuments.TryGetValue(normalized, out var openText))
+            if (openDocuments.TryGetValue(normalized, out string? openText))
             {
                 return openText;
             }
@@ -1070,39 +1041,39 @@ namespace ShaderTools.Core.Protocol
 
         private string? GetDiskText(string normalizedUri)
         {
-            if (!Uri.TryCreate(normalizedUri, UriKind.Absolute, out var uri) || !uri.IsFile)
+            if (!Uri.TryCreate(normalizedUri, UriKind.Absolute, out Uri? uri) || !uri.IsFile)
             {
                 return null;
             }
 
             try
             {
-                var info = new FileInfo(uri.LocalPath);
+                FileInfo info = new FileInfo(uri.LocalPath);
                 if (!info.Exists)
                 {
                     RemoveDiskDocument(normalizedUri);
                     return null;
                 }
 
-                var lastWrite = info.LastWriteTimeUtc.Ticks;
-                var length = info.Length;
-                if (diskDocuments.TryGetValue(normalizedUri, out var cached) &&
+                long lastWrite = info.LastWriteTimeUtc.Ticks;
+                long length = info.Length;
+                if (diskDocuments.TryGetValue(normalizedUri, out DiskDocument? cached) &&
                     cached.LastWriteTicks == lastWrite && cached.Length == length)
                 {
                     TouchDiskDocument(normalizedUri);
                     return cached.Text;
                 }
 
-                var text = File.ReadAllText(info.FullName);
+                string text = File.ReadAllText(info.FullName);
                 AddDiskDocument(normalizedUri, new DiskDocument(lastWrite, length, text));
                 return text;
             }
             catch (Exception exception) when (
-                exception is IOException ||
-                exception is UnauthorizedAccessException ||
-                exception is ArgumentException ||
-                exception is NotSupportedException ||
-                exception is SecurityException)
+                exception is IOException or
+                UnauthorizedAccessException or
+                ArgumentException or
+                NotSupportedException or
+                SecurityException)
             {
                 RemoveDiskDocument(normalizedUri);
                 return null;
@@ -1114,7 +1085,7 @@ namespace ShaderTools.Core.Protocol
             if (!openDocuments.ContainsKey(normalizedUri) && openDocuments.Count >= MaximumOpenDocuments)
             {
                 string? oldest = null;
-                using (var enumerator = openDocuments.Keys.GetEnumerator())
+                using (Dictionary<string, string>.KeyCollection.Enumerator enumerator = openDocuments.Keys.GetEnumerator())
                 {
                     if (enumerator.MoveNext())
                     {
@@ -1124,7 +1095,7 @@ namespace ShaderTools.Core.Protocol
 
                 if (oldest != null)
                 {
-                    openDocuments.Remove(oldest);
+                    _=openDocuments.Remove(oldest);
                 }
             }
 
@@ -1133,13 +1104,13 @@ namespace ShaderTools.Core.Protocol
 
         private void InvalidateOpenDocument(string normalizedUri)
         {
-            openDocuments.Remove(normalizedUri);
+            _=openDocuments.Remove(normalizedUri);
         }
 
         private void AddPending(JToken id, RequestContext context)
         {
-            var key = RequestKey(id);
-            if (pendingNodes.TryGetValue(key, out var existing))
+            string key = RequestKey(id);
+            if (pendingNodes.TryGetValue(key, out LinkedListNode<string>? existing))
             {
                 pendingOrder.Remove(existing);
             }
@@ -1162,11 +1133,11 @@ namespace ShaderTools.Core.Protocol
 
         private void RemovePendingKey(string key)
         {
-            pendingRequests.Remove(key);
-            if (pendingNodes.TryGetValue(key, out var node))
+            _=pendingRequests.Remove(key);
+            if (pendingNodes.TryGetValue(key, out LinkedListNode<string>? node))
             {
                 pendingOrder.Remove(node);
-                pendingNodes.Remove(key);
+                _=pendingNodes.Remove(key);
             }
         }
 
@@ -1187,22 +1158,22 @@ namespace ShaderTools.Core.Protocol
 
         private void TouchDiskDocument(string uri)
         {
-            if (diskNodes.TryGetValue(uri, out var existing))
+            if (diskNodes.TryGetValue(uri, out LinkedListNode<string>? existing))
             {
                 diskOrder.Remove(existing);
             }
 
-            var node = diskOrder.AddLast(uri);
+            LinkedListNode<string> node = diskOrder.AddLast(uri);
             diskNodes[uri] = node;
         }
 
         private void RemoveDiskDocument(string uri)
         {
-            diskDocuments.Remove(uri);
-            if (diskNodes.TryGetValue(uri, out var node))
+            _=diskDocuments.Remove(uri);
+            if (diskNodes.TryGetValue(uri, out LinkedListNode<string>? node))
             {
                 diskOrder.Remove(node);
-                diskNodes.Remove(uri);
+                _=diskNodes.Remove(uri);
             }
         }
 
@@ -1219,7 +1190,7 @@ namespace ShaderTools.Core.Protocol
 
         private static string? NormalizeUri(string? value)
         {
-            if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            if (string.IsNullOrWhiteSpace(value) || !Uri.TryCreate(value, UriKind.Absolute, out Uri? uri))
             {
                 return null;
             }

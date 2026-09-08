@@ -1,8 +1,8 @@
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.Core.Configuration;
 
@@ -74,21 +74,21 @@ public static class VariantCatalog
             throw new ArgumentException("A workspace root is required.", nameof(workspaceRoot));
         }
 
-        var absoluteFilePath = Path.GetFullPath(filePath);
-        var absoluteWorkspaceRoot = Path.GetFullPath(workspaceRoot);
+        string absoluteFilePath = Path.GetFullPath(filePath);
+        string absoluteWorkspaceRoot = Path.GetFullPath(workspaceRoot);
         if (!File.Exists(absoluteFilePath))
         {
             return Array.Empty<ShaderVariant>();
         }
 
-        var token = ConfigurationJson.ReadJson(absoluteFilePath);
-        if (!(token is JArray entries))
+        JToken token = ConfigurationJson.ReadJson(absoluteFilePath);
+        if (token is not JArray entries)
         {
             throw ConfigurationJson.Invalid(absoluteFilePath, "$", "must be a JSON array");
         }
 
-        var variants = new List<ShaderVariant>();
-        var databaseFormat = DetectDatabaseFormat(entries, absoluteFilePath);
+        List<ShaderVariant> variants = [];
+        bool databaseFormat = DetectDatabaseFormat(entries, absoluteFilePath);
         if (databaseFormat)
         {
             LoadDatabase(entries, absoluteFilePath, absoluteWorkspaceRoot, variants);
@@ -109,20 +109,20 @@ public static class VariantCatalog
             return false;
         }
 
-        if (!(entries[0] is JObject first))
+        if (entries[0] is not JObject first)
         {
             throw ConfigurationJson.Invalid(filePath, "[0]", "must be an object");
         }
 
-        var database = first["uri"] != null || first["variants"] != null;
-        for (var index = 1; index < entries.Count; index++)
+        bool database = first["uri"] != null || first["variants"] != null;
+        for (int index = 1; index < entries.Count; index++)
         {
-            if (!(entries[index] is JObject entry))
+            if (entries[index] is not JObject entry)
             {
                 throw ConfigurationJson.Invalid(filePath, $"[{index}]", "must be an object");
             }
 
-            var entryIsDatabase = entry["uri"] != null || entry["variants"] != null;
+            bool entryIsDatabase = entry["uri"] != null || entry["variants"] != null;
             if (entryIsDatabase != database)
             {
                 throw ConfigurationJson.Invalid(filePath, $"[{index}]", "cannot mix native variants and shader-validator database entries");
@@ -134,48 +134,48 @@ public static class VariantCatalog
 
     private static void LoadNative(JArray entries, string filePath, string workspaceRoot, ICollection<ShaderVariant> result)
     {
-        for (var index = 0; index < entries.Count; index++)
+        for (int index = 0; index < entries.Count; index++)
         {
-            if (!(entries[index] is JObject entry))
+            if (entries[index] is not JObject entry)
             {
                 throw ConfigurationJson.Invalid(filePath, $"[{index}]", "must be an object");
             }
 
-            var path = $"[{index}]";
+            string path = $"[{index}]";
             ConfigurationJson.RejectUnknownProperties(entry, NativeProperties, filePath, path);
-            var name = ConfigurationJson.RequireString(entry, "name", filePath, path);
-            var shaderFile = ConfigurationJson.RequireString(entry, "file", filePath, path);
-            var entryPoint = ConfigurationJson.RequireString(entry, "entryPoint", filePath, path);
-            var absoluteShaderFile = ResolveShaderPath(shaderFile, workspaceRoot, filePath, path + ".file");
+            string name = ConfigurationJson.RequireString(entry, "name", filePath, path);
+            string shaderFile = ConfigurationJson.RequireString(entry, "file", filePath, path);
+            string entryPoint = ConfigurationJson.RequireString(entry, "entryPoint", filePath, path);
+            string absoluteShaderFile = ResolveShaderPath(shaderFile, workspaceRoot, filePath, path + ".file");
             result.Add(CreateVariant(entry, name, absoluteShaderFile, entryPoint, filePath, path, path + ".file", workspaceRoot));
         }
     }
 
     private static void LoadDatabase(JArray entries, string filePath, string workspaceRoot, ICollection<ShaderVariant> result)
     {
-        for (var fileIndex = 0; fileIndex < entries.Count; fileIndex++)
+        for (int fileIndex = 0; fileIndex < entries.Count; fileIndex++)
         {
-            var fileEntry = (JObject)entries[fileIndex];
-            var filePathInJson = $"[{fileIndex}]";
+            JObject fileEntry = (JObject)entries[fileIndex];
+            string filePathInJson = $"[{fileIndex}]";
             ConfigurationJson.RejectUnknownProperties(fileEntry, DatabaseFileProperties, filePath, filePathInJson);
-            var uri = ConfigurationJson.RequireString(fileEntry, "uri", filePath, filePathInJson);
-            var absoluteShaderFile = ResolveShaderPath(uri, workspaceRoot, filePath, filePathInJson + ".uri");
+            string uri = ConfigurationJson.RequireString(fileEntry, "uri", filePath, filePathInJson);
+            string absoluteShaderFile = ResolveShaderPath(uri, workspaceRoot, filePath, filePathInJson + ".uri");
 
-            if (!(fileEntry["variants"] is JArray variants))
+            if (fileEntry["variants"] is not JArray variants)
             {
                 throw ConfigurationJson.Invalid(filePath, filePathInJson + ".variants", "must be an array");
             }
 
-            for (var variantIndex = 0; variantIndex < variants.Count; variantIndex++)
+            for (int variantIndex = 0; variantIndex < variants.Count; variantIndex++)
             {
-                var variantPath = $"{filePathInJson}.variants[{variantIndex}]";
-                if (!(variants[variantIndex] is JObject entry))
+                string variantPath = $"{filePathInJson}.variants[{variantIndex}]";
+                if (variants[variantIndex] is not JObject entry)
                 {
                     throw ConfigurationJson.Invalid(filePath, variantPath, "must be an object");
                 }
 
                 ConfigurationJson.RejectUnknownProperties(entry, DatabaseVariantProperties, filePath, variantPath);
-                var name = ConfigurationJson.RequireString(entry, "name", filePath, variantPath);
+                string name = ConfigurationJson.RequireString(entry, "name", filePath, variantPath);
                 result.Add(CreateVariant(entry, name, absoluteShaderFile, name, filePath, variantPath, filePathInJson + ".uri", workspaceRoot));
             }
         }
@@ -191,20 +191,20 @@ public static class VariantCatalog
         string shaderPropertyPath,
         string workspaceRoot)
     {
-        var stage = NormalizeStage(entry["stage"], catalogPath, propertyPath + ".stage");
-        var definesJson = ConfigurationJson.OptionalStringMap(entry, "defines", catalogPath, propertyPath);
-        var includesJson = ConfigurationJson.OptionalStringArray(entry, "includes", catalogPath, propertyPath);
+        string? stage = NormalizeStage(entry["stage"], catalogPath, propertyPath + ".stage");
+        JObject definesJson = ConfigurationJson.OptionalStringMap(entry, "defines", catalogPath, propertyPath);
+        JArray includesJson = ConfigurationJson.OptionalStringArray(entry, "includes", catalogPath, propertyPath);
 
-        var defines = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var property in definesJson.Properties())
+        Dictionary<string, string> defines = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (JProperty property in definesJson.Properties())
         {
             defines.Add(
                 property.Name,
                 ConfigurationJson.ResolveText(property.Value.Value<string>()!, workspaceRoot, catalogPath, propertyPath + ".defines." + property.Name));
         }
 
-        var includes = new List<string>(includesJson.Count);
-        for (var index = 0; index < includesJson.Count; index++)
+        List<string> includes = new List<string>(includesJson.Count);
+        for (int index = 0; index < includesJson.Count; index++)
         {
             includes.Add(ConfigurationJson.ResolvePath(
                 includesJson[index].Value<string>()!,
@@ -236,13 +236,13 @@ public static class VariantCatalog
             throw ConfigurationJson.Invalid(filePath, propertyPath, "must be a string");
         }
 
-        var value = token.Value<string>()!;
+        string value = token.Value<string>()!;
         if (string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase) || value.Length == 0)
         {
             return null;
         }
 
-        if (!StageAliases.TryGetValue(value, out var normalized))
+        if (!StageAliases.TryGetValue(value, out string? normalized))
         {
             throw ConfigurationJson.Invalid(filePath, propertyPath, $"'{value}' is not a supported shader stage");
         }
@@ -252,13 +252,13 @@ public static class VariantCatalog
 
     private static string ResolveShaderPath(string value, string workspaceRoot, string catalogPath, string propertyPath)
     {
-        var expanded = ConfigurationJson.ResolveText(value, workspaceRoot, catalogPath, propertyPath);
+        string expanded = ConfigurationJson.ResolveText(value, workspaceRoot, catalogPath, propertyPath);
         if (Path.IsPathRooted(expanded))
         {
             return Path.GetFullPath(expanded);
         }
 
-        if (Uri.TryCreate(expanded, UriKind.Absolute, out var uri))
+        if (Uri.TryCreate(expanded, UriKind.Absolute, out Uri? uri))
         {
             if (!uri.IsFile)
             {
@@ -273,7 +273,7 @@ public static class VariantCatalog
 
     private static string GetShadingLanguage(string shaderFile, string catalogPath, string propertyPath)
     {
-        var extension = Path.GetExtension(shaderFile);
+        string extension = Path.GetExtension(shaderFile);
         if (GlslExtensions.Contains(extension))
         {
             return "Glsl";
@@ -294,10 +294,10 @@ public static class VariantCatalog
 
     private static void RejectDuplicates(IEnumerable<ShaderVariant> variants, string catalogPath)
     {
-        var namesByFile = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var variant in variants)
+        Dictionary<string, HashSet<string>> namesByFile = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (ShaderVariant variant in variants)
         {
-            if (!namesByFile.TryGetValue(variant.FilePath, out var names))
+            if (!namesByFile.TryGetValue(variant.FilePath, out HashSet<string>? names))
             {
                 names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 namesByFile.Add(variant.FilePath, names);

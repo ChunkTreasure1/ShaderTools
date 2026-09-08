@@ -1,26 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
-	<Metadata>
-		<Identity Id="ShaderTools.f373ca48-f553-49ee-a743-4470b600021b" Version="0.2.4" Language="en-US" Publisher="skyvx" />
-		<DisplayName>Shader Tools for Visual Studio</DisplayName>
-		<Description xml:space="preserve">GLSL and HLSL language tools: compiler diagnostics, IntelliSense, navigation, parameter hints, formatting, shader variants and a native shader explorer. Powered by shader-sense.</Description>
-		<Icon>assets/logo.png</Icon>
-		<Tags>GLSL,HLSL,WGSL,shaders,IntelliSense,Vulkan,OpenGL,DirectX</Tags>
-	</Metadata>
-	<Installation>
-		<InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14, 19.0)">
-			<ProductArchitecture>amd64</ProductArchitecture>
-		</InstallationTarget>
-	</Installation>
-	<Dependencies>
-		<Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.7.2,)" />
-	</Dependencies>
-	<Prerequisites>
-		<Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.14,19.0)" DisplayName="Visual Studio core editor" />
-	</Prerequisites>
-	<Assets>
-		<Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
-		<Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;BuiltProjectOutputGroup|" />
-		<Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="File" Path="ShaderTools.pkgdef" />
-	</Assets>
+    <Metadata>
+        <Identity Id="ShaderTools.f373ca48-f553-49ee-a743-4470b600021b" Version="0.2.5" Language="en-US" Publisher="skyvxl" />
+        <DisplayName>Shader Tools for Visual Studio</DisplayName>
+        <Description xml:space="preserve">GLSL and HLSL language tools: compiler diagnostics, IntelliSense, navigation, parameter hints, formatting, shader variants and a native shader explorer. Powered by shader-sense.</Description>
+        <Icon>assets/logo.png</Icon>
+        <Tags>GLSL,HLSL,WGSL,shaders,IntelliSense,Vulkan,OpenGL,DirectX</Tags>
+    </Metadata>
+    <Installation>
+        <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.14, 19.0)">
+            <ProductArchitecture>amd64</ProductArchitecture>
+        </InstallationTarget>
+    </Installation>
+    <Dependencies>
+        <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.7.2,)" />
+    </Dependencies>
+    <Prerequisites>
+        <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.14,19.0)" DisplayName="Visual Studio core editor" />
+    </Prerequisites>
+    <Assets>
+        <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
+        <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="%CurrentProject%" Path="|%CurrentProject%;BuiltProjectOutputGroup|" />
+        <Asset Type="Microsoft.VisualStudio.VsPackage" d:Source="File" Path="ShaderTools.pkgdef" />
+    </Assets>
 </PackageManifest>

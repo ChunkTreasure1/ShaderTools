@@ -1,12 +1,12 @@
+using Microsoft.VisualStudio.Shell;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using ShaderTools.Core.Configuration;
 using System;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.Shell;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using ShaderTools.Core.Configuration;
 
 namespace ShaderTools.VisualStudio.Options
 {
@@ -19,7 +19,7 @@ namespace ShaderTools.VisualStudio.Options
     public sealed class ShaderOptions : DialogPage
     {
         private static ShaderOptions current;
-        public static ShaderOptions Current => current ?? (current = LoadEarly());
+        public static ShaderOptions Current => current ??= LoadEarly();
         public static event EventHandler Changed;
         public static string SettingsDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ShaderTools");
         public static string SettingsPath => Path.Combine(SettingsDirectory, "server-settings.json");
@@ -63,7 +63,7 @@ namespace ShaderTools.VisualStudio.Options
             if ((!string.IsNullOrWhiteSpace(ServerPath) && (!Path.IsPathRooted(ServerPath) || !File.Exists(ServerPath))) ||
                 (!string.IsNullOrWhiteSpace(FormatDirectory) && !File.Exists(Path.Combine(FormatDirectory, "clang-format.exe"))))
             {
-                System.Windows.Forms.MessageBox.Show("Check the custom server path and clang-format directory. Leave them empty to use automatic discovery.", "Shader Tools");
+                _=System.Windows.Forms.MessageBox.Show("Check the custom server path and clang-format directory. Leave them empty to use automatic discovery.", "Shader Tools");
                 e.ApplyBehavior = ApplyKind.Cancel;
                 return;
             }
@@ -73,12 +73,15 @@ namespace ShaderTools.VisualStudio.Options
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
-        public Task SaveSnapshotAsync() => Task.Run(() => SaveSnapshot());
+        public Task SaveSnapshotAsync()
+        {
+            return Task.Run(SaveSnapshot);
+        }
 
         private void SaveSnapshot()
         {
-            Directory.CreateDirectory(SettingsDirectory);
-            var config = ShaderConfiguration.CreateDefaultSettings();
+            _=Directory.CreateDirectory(SettingsDirectory);
+            JObject config = ShaderConfiguration.CreateDefaultSettings();
             config["validate"] = Validate;
             config["automaticVariantDiscovery"] = AutomaticVariantDiscovery;
             config["glsl"]["targetClient"] = TargetClient.ToString();
@@ -86,12 +89,22 @@ namespace ShaderTools.VisualStudio.Options
             config["hlsl"]["shaderModel"] = ShaderModel.ToString();
             config["hlsl"]["enable16bitTypes"] = Enable16BitTypes;
             WriteAtomic(SettingsPath, config.ToString(Formatting.Indented));
-            var preferences = new JObject { ["enableHlsl"] = EnableHlsl, ["enableWgsl"] = EnableWgsl,
-                ["enableInlayHints"] = EnableInlayHints, ["fadeInactiveCode"] = FadeInactiveCode, ["useCppColors"] = UseCppColors,
-                ["validate"] = Validate, ["automaticVariantDiscovery"] = AutomaticVariantDiscovery,
-                ["targetClient"] = TargetClient.ToString(), ["spirvVersion"] = SpirvVersion.ToString(),
-                ["shaderModel"] = ShaderModel.ToString(), ["enable16BitTypes"] = Enable16BitTypes,
-                ["serverPath"] = ServerPath, ["formatDirectory"] = FormatDirectory };
+            JObject preferences = new JObject
+            {
+                ["enableHlsl"] = EnableHlsl,
+                ["enableWgsl"] = EnableWgsl,
+                ["enableInlayHints"] = EnableInlayHints,
+                ["fadeInactiveCode"] = FadeInactiveCode,
+                ["useCppColors"] = UseCppColors,
+                ["validate"] = Validate,
+                ["automaticVariantDiscovery"] = AutomaticVariantDiscovery,
+                ["targetClient"] = TargetClient.ToString(),
+                ["spirvVersion"] = SpirvVersion.ToString(),
+                ["shaderModel"] = ShaderModel.ToString(),
+                ["enable16BitTypes"] = Enable16BitTypes,
+                ["serverPath"] = ServerPath,
+                ["formatDirectory"] = FormatDirectory
+            };
             WriteAtomic(PreferencesPath, preferences.ToString(Formatting.Indented));
         }
 
@@ -101,19 +114,35 @@ namespace ShaderTools.VisualStudio.Options
             try
             {
                 File.WriteAllText(temporary, text);
-                if (File.Exists(path)) File.Replace(temporary, path, null);
-                else File.Move(temporary, path);
+                if (File.Exists(path))
+                {
+                    File.Replace(temporary, path, null);
+                }
+                else
+                {
+                    File.Move(temporary, path);
+                }
             }
-            finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            finally
+            {
+                if (File.Exists(temporary))
+                {
+                    File.Delete(temporary);
+                }
+            }
         }
 
         private static ShaderOptions LoadEarly()
         {
-            var result = new ShaderOptions();
+            ShaderOptions result = new ShaderOptions();
             try
             {
-                if (!File.Exists(PreferencesPath)) return result;
-                var prefs = JObject.Parse(File.ReadAllText(PreferencesPath));
+                if (!File.Exists(PreferencesPath))
+                {
+                    return result;
+                }
+
+                JObject prefs = JObject.Parse(File.ReadAllText(PreferencesPath));
                 result.EnableHlsl = (bool?)prefs["enableHlsl"] ?? true;
                 result.EnableWgsl = (bool?)prefs["enableWgsl"] ?? true;
                 result.EnableInlayHints = (bool?)prefs["enableInlayHints"] ?? true;
@@ -121,14 +150,26 @@ namespace ShaderTools.VisualStudio.Options
                 result.UseCppColors = (bool?)prefs["useCppColors"] ?? true;
                 result.Validate = (bool?)prefs["validate"] ?? true;
                 result.AutomaticVariantDiscovery = (bool?)prefs["automaticVariantDiscovery"] ?? true;
-                if (Enum.TryParse((string)prefs["targetClient"], out GlslTarget target)) result.TargetClient = target;
-                if (Enum.TryParse((string)prefs["spirvVersion"], out SpirvTarget spirv)) result.SpirvVersion = spirv;
-                if (Enum.TryParse((string)prefs["shaderModel"], out HlslModel model)) result.ShaderModel = model;
+                if (Enum.TryParse((string)prefs["targetClient"], out GlslTarget target))
+                {
+                    result.TargetClient = target;
+                }
+
+                if (Enum.TryParse((string)prefs["spirvVersion"], out SpirvTarget spirv))
+                {
+                    result.SpirvVersion = spirv;
+                }
+
+                if (Enum.TryParse((string)prefs["shaderModel"], out HlslModel model))
+                {
+                    result.ShaderModel = model;
+                }
+
                 result.Enable16BitTypes = (bool?)prefs["enable16BitTypes"] ?? false;
                 result.ServerPath = (string)prefs["serverPath"] ?? "";
                 result.FormatDirectory = (string)prefs["formatDirectory"] ?? "";
             }
-            catch (Exception ex) when (ex is IOException || ex is JsonException || ex is ArgumentException)
+            catch (Exception ex) when (ex is IOException or JsonException or ArgumentException)
             { System.Diagnostics.Trace.WriteLine("Shader Tools preferences: " + ex.Message); }
             return result;
         }

@@ -1,15 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
-using System.ComponentModel.Composition;
-using System.Diagnostics;
-using System.IO;
-using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
-using ShaderTools.VisualStudio.Editor;
-using ShaderTools.VisualStudio.Options;
-using ShaderTools.VisualStudio.Services;
 using Microsoft.VisualStudio.LanguageServer.Client;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Threading;
@@ -17,7 +5,19 @@ using Microsoft.VisualStudio.Utilities;
 using Newtonsoft.Json.Linq;
 using ShaderTools.Core;
 using ShaderTools.Core.Configuration;
+using ShaderTools.VisualStudio.Editor;
+using ShaderTools.VisualStudio.Options;
+using ShaderTools.VisualStudio.Services;
 using StreamJsonRpc;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ShaderTools.VisualStudio.LanguageClient
 {
@@ -58,22 +58,35 @@ namespace ShaderTools.VisualStudio.LanguageClient
 
         internal void DocumentOpened(string uri)
         {
-            documents.GetOrAdd(uri, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult(true);
-            if (IsReady) OnWorkspaceChanged();
+            _=documents.GetOrAdd(uri, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult(true);
+            if (IsReady)
+            {
+                OnWorkspaceChanged();
+            }
         }
-        internal void DocumentClosed(string uri) { if (documents.TryRemove(uri, out var pending)) pending.TrySetCanceled(); }
+        internal void DocumentClosed(string uri)
+        {
+            if (documents.TryRemove(uri, out TaskCompletionSource<bool> pending))
+            {
+                _=pending.TrySetCanceled();
+            }
+        }
         public async Task EnsureDocumentAsync(string path, CancellationToken token)
         {
             string uri = new Uri(path).AbsoluteUri;
-            var pending = documents.GetOrAdd(uri, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
-            if (!pending.Task.IsCompleted) await WorkspaceContext.OpenFileAsync(path);
-            var deadline = Task.Delay(10000, token);
+            TaskCompletionSource<bool> pending = documents.GetOrAdd(uri, _ => new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously));
+            if (!pending.Task.IsCompleted)
+            {
+                await WorkspaceContext.OpenFileAsync(path);
+            }
+
+            Task deadline = Task.Delay(10000, token);
             if (await Task.WhenAny(pending.Task, deadline) != pending.Task)
             {
                 token.ThrowIfCancellationRequested();
                 throw new TimeoutException("The shader document has not connected to the language server. Reopen it or restart the server.");
             }
-            await pending.Task;
+            _=await pending.Task;
         }
 
         public async Task OnLoadedAsync()
@@ -85,7 +98,10 @@ namespace ShaderTools.VisualStudio.LanguageClient
                 await workspaceMonitor.InitializeAsync();
                 loaded = true;
             }
-            if (StartAsync != null) await StartAsync.InvokeAsync(this, EventArgs.Empty);
+            if (StartAsync != null)
+            {
+                await StartAsync.InvokeAsync(this, EventArgs.Empty);
+            }
         }
 
         public async Task<Connection> ActivateAsync(CancellationToken token)
@@ -94,11 +110,11 @@ namespace ShaderTools.VisualStudio.LanguageClient
             string root = await WorkspaceContext.GetRootAsync();
             if (!SameRoot(root, WorkspaceRoot))
             {
-                Interlocked.Increment(ref variantIntentVersion);
+                _=Interlocked.Increment(ref variantIntentVersion);
                 ActiveVariant = null;
             }
             WorkspaceRoot = root;
-            var options = ShaderOptions.Current;
+            ShaderOptions options = ShaderOptions.Current;
             await options.SaveSnapshotAsync();
             await TaskScheduler.Default;
             token.ThrowIfCancellationRequested();
@@ -106,28 +122,50 @@ namespace ShaderTools.VisualStudio.LanguageClient
             string bridge = Path.Combine(directory, "Bridge", "ShaderTools.Bridge.exe");
             string server = string.IsNullOrWhiteSpace(options.ServerPath) ? Path.Combine(directory, "Server", "shader-language-server.exe") : options.ServerPath;
             if (!File.Exists(bridge) || !File.Exists(server))
-                throw new FileNotFoundException("Shader Tools is incomplete. Reinstall the VSIX; the Bridge and Server folders must be present.");
-            await StopProcessAsync();
-            var args = "--server " + WindowsCommandLine.Quote(server) + " --settings " + WindowsCommandLine.Quote(ShaderOptions.SettingsPath) +
-                " --parent " + Process.GetCurrentProcess().Id;
-            if (!string.IsNullOrEmpty(WorkspaceRoot)) args += " --workspace " + WindowsCommandLine.Quote(WorkspaceRoot);
-            string formatDirectory = FindFormatDirectory(options.FormatDirectory);
-            if (formatDirectory != null) args += " --format-directory " + WindowsCommandLine.Quote(formatDirectory);
-            else ShaderOutput.Log("Formatting unavailable: install LLVM or set Tools > Options > Shader Tools > clang-format directory, then restart the server.");
-            var started = new Process
             {
-                StartInfo = new ProcessStartInfo(bridge, args) { UseShellExecute = false, CreateNoWindow = true,
-                    RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-                    WorkingDirectory = string.IsNullOrEmpty(WorkspaceRoot) ? directory : WorkspaceRoot },
+                throw new FileNotFoundException("Shader Tools is incomplete. Reinstall the VSIX; the Bridge and Server folders must be present.");
+            }
+
+            await StopProcessAsync();
+            string args = "--server " + WindowsCommandLine.Quote(server) + " --settings " + WindowsCommandLine.Quote(ShaderOptions.SettingsPath) +
+                " --parent " + Process.GetCurrentProcess().Id;
+            if (!string.IsNullOrEmpty(WorkspaceRoot))
+            {
+                args += " --workspace " + WindowsCommandLine.Quote(WorkspaceRoot);
+            }
+
+            string formatDirectory = FindFormatDirectory(options.FormatDirectory);
+            if (formatDirectory != null)
+            {
+                args += " --format-directory " + WindowsCommandLine.Quote(formatDirectory);
+            }
+            else
+            {
+                ShaderOutput.Log("Formatting unavailable: install LLVM or set Tools > Options > Shader Tools > clang-format directory, then restart the server.");
+            }
+
+            Process started = new Process
+            {
+                StartInfo = new ProcessStartInfo(bridge, args)
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WorkingDirectory = string.IsNullOrEmpty(WorkspaceRoot) ? directory : WorkspaceRoot
+                },
                 EnableRaisingEvents = true
             };
-            started.ErrorDataReceived += (_, e) => { if (e.Data != null) ShaderOutput.Log(e.Data); };
+            started.ErrorDataReceived += (_, e) => { if (e.Data != null) { ShaderOutput.Log(e.Data); } };
             started.Exited += (_, __) =>
             {
                 if (ReferenceEquals(process, started))
+                {
                     SetState(false, "Shader server stopped. Use Extensions > Shader Tools > Restart language server.");
+                }
             };
-            started.Start();
+            _=started.Start();
             process = started;
             started.BeginErrorReadLine();
             WatchConfiguration();
@@ -143,14 +181,18 @@ namespace ShaderTools.VisualStudio.LanguageClient
         public Task OnServerInitializedAsync()
         {
             SetState(true, "Ready · GLSL / HLSL / WGSL · server 1.4.3");
-            var variant = ActiveVariant;
+            ShaderVariant variant = ActiveVariant;
             long intent = Interlocked.Read(ref variantIntentVersion);
-            if (variant != null) BackgroundWork.Run(() => SetVariantCoreAsync(variant, intent, lifetime.Token), "ShaderTools/RestoreVariant");
+            if (variant != null)
+            {
+                BackgroundWork.Run(() => SetVariantCoreAsync(variant, intent, lifetime.Token), "ShaderTools/RestoreVariant");
+            }
+
             return Task.CompletedTask;
         }
         public Task<InitializationFailureContext> OnServerInitializeFailedAsync(ILanguageClientInitializationInfo info)
         {
-            var message = "Shader Tools could not initialize: " + (info.InitializationException?.Message ?? info.StatusMessage) +
+            string message = "Shader Tools could not initialize: " + (info.InitializationException?.Message ?? info.StatusMessage) +
                 ". Open Extensions > Shader Tools > Show server output for details.";
             SetState(false, message);
             return Task.FromResult(new InitializationFailureContext { FailureMessage = message });
@@ -158,30 +200,48 @@ namespace ShaderTools.VisualStudio.LanguageClient
 
         public Task<JToken> RequestAsync(string method, JObject parameters, CancellationToken token)
         {
-            var connection = rpc;
-            if (!IsReady || connection == null) throw new InvalidOperationException("The shader language server is not ready. Open a shader or restart the server.");
+            JsonRpc connection = rpc;
+            if (!IsReady || connection == null)
+            {
+                throw new InvalidOperationException("The shader language server is not ready. Open a shader or restart the server.");
+            }
+
             return connection.InvokeWithParameterObjectAsync<JToken>(method, parameters, token);
         }
 
         public Task NotifyAsync(string method, JObject parameters)
         {
-            var connection = rpc;
-            if (!IsReady || connection == null) throw new InvalidOperationException("The shader language server is not ready.");
+            JsonRpc connection = rpc;
+            if (!IsReady || connection == null)
+            {
+                throw new InvalidOperationException("The shader language server is not ready.");
+            }
+
             return connection.NotifyWithParameterObjectAsync(method, parameters);
         }
 
-        public Task RestartAsync() => RestartCoreAsync(false);
+        public Task RestartAsync()
+        {
+            return RestartCoreAsync(false);
+        }
 
         private async Task RestartCoreAsync(bool workspaceChanged)
         {
             await restartGate.WaitAsync(lifetime.Token);
             try
             {
-                if (workspaceChanged && SameRoot(WorkspaceRoot, await WorkspaceContext.GetRootAsync())) return;
+                if (workspaceChanged && SameRoot(WorkspaceRoot, await WorkspaceContext.GetRootAsync()))
+                {
+                    return;
+                }
+
                 SetState(false, "Restarting shader language server…");
                 Task stopping = StopAsync?.InvokeAsync(this, EventArgs.Empty) ?? Task.CompletedTask;
                 if (await Task.WhenAny(stopping, Task.Delay(3000, lifetime.Token)) != stopping)
+                {
                     ShaderOutput.Log("Graceful server shutdown timed out; closing the bridge.");
+                }
+
                 await StopProcessAsync();
                 if (await Task.WhenAny(stopping, Task.Delay(2000, lifetime.Token)) == stopping)
                 {
@@ -195,37 +255,68 @@ namespace ShaderTools.VisualStudio.LanguageClient
                 }
                 lifetime.Token.ThrowIfCancellationRequested();
                 rpc = null;
-                foreach (var entry in documents) entry.Value.TrySetCanceled();
+                foreach (KeyValuePair<string, TaskCompletionSource<bool>> entry in documents)
+                {
+                    _=entry.Value.TrySetCanceled();
+                }
+
                 documents.Clear();
                 ShaderDiagnostics.Clear();
-                if (StartAsync != null) await StartAsync.InvokeAsync(this, EventArgs.Empty);
+                if (StartAsync != null)
+                {
+                    await StartAsync.InvokeAsync(this, EventArgs.Empty);
+                }
             }
-            finally { restartGate.Release(); }
+            finally { _=restartGate.Release(); }
         }
 
-        public Task SetVariantAsync(ShaderVariant variant, CancellationToken token) =>
-            SetVariantCoreAsync(variant, Interlocked.Increment(ref variantIntentVersion), token);
+        public Task SetVariantAsync(ShaderVariant variant, CancellationToken token)
+        {
+            return SetVariantCoreAsync(variant, Interlocked.Increment(ref variantIntentVersion), token);
+        }
 
         private async Task SetVariantCoreAsync(ShaderVariant variant, long intent, CancellationToken token)
         {
             await variantGate.WaitAsync(token);
             try
             {
-                if (intent != Interlocked.Read(ref variantIntentVersion)) return;
-                if (variant != null) await EnsureDocumentAsync(variant.FilePath, token);
-                if (intent != Interlocked.Read(ref variantIntentVersion)) return;
-                if (IsReady) await NotifyAsync("textDocument/didChangeShaderVariant",
-                    new JObject { ["shaderVariant"] = variant == null ? JValue.CreateNull() : (JToken)variant.ToProtocol() });
-                else if (variant != null) throw new InvalidOperationException("The shader language server is not ready.");
+                if (intent != Interlocked.Read(ref variantIntentVersion))
+                {
+                    return;
+                }
+
+                if (variant != null)
+                {
+                    await EnsureDocumentAsync(variant.FilePath, token);
+                }
+
+                if (intent != Interlocked.Read(ref variantIntentVersion))
+                {
+                    return;
+                }
+
+                if (IsReady)
+                {
+                    await NotifyAsync("textDocument/didChangeShaderVariant",
+                    new JObject { ["shaderVariant"] = variant == null ? JValue.CreateNull() : variant.ToProtocol() });
+                }
+                else if (variant != null)
+                {
+                    throw new InvalidOperationException("The shader language server is not ready.");
+                }
+
                 ActiveVariant = variant;
                 SetState(IsReady, Status);
             }
-            finally { variantGate.Release(); }
+            finally { _=variantGate.Release(); }
         }
 
-        private static bool SameRoot(string first, string second) => string.Equals(
+        private static bool SameRoot(string first, string second)
+        {
+            return string.Equals(
             (first ?? "").TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
             (second ?? "").TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+        }
 
         private void OnWorkspaceChanged()
         {
@@ -233,19 +324,29 @@ namespace ShaderTools.VisualStudio.LanguageClient
             BackgroundWork.Run(async () =>
             {
                 await Task.Delay(350, lifetime.Token);
-                if (version == Interlocked.Read(ref workspaceChangeVersion)) await RestartCoreAsync(true);
+                if (version == Interlocked.Read(ref workspaceChangeVersion))
+                {
+                    await RestartCoreAsync(true);
+                }
             }, "ShaderTools/WorkspaceChanged");
         }
 
         public async Task ReloadConfigurationAsync()
         {
-            if (IsReady) await NotifyAsync("workspace/didChangeConfiguration", new JObject { ["settings"] = new JObject() });
+            if (IsReady)
+            {
+                await NotifyAsync("workspace/didChangeConfiguration", new JObject { ["settings"] = new JObject() });
+            }
         }
 
         private void WatchConfiguration()
         {
             configurationWatcher?.Dispose();
-            if (string.IsNullOrEmpty(WorkspaceRoot) || !Directory.Exists(WorkspaceRoot)) return;
+            if (string.IsNullOrEmpty(WorkspaceRoot) || !Directory.Exists(WorkspaceRoot))
+            {
+                return;
+            }
+
             configurationWatcher = new FileSystemWatcher(WorkspaceRoot, ".shadertools.json") { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
             configurationWatcher.Changed += OnConfigurationFileChanged;
             configurationWatcher.Created += OnConfigurationFileChanged;
@@ -256,23 +357,26 @@ namespace ShaderTools.VisualStudio.LanguageClient
 
         private void OnConfigurationFileChanged(object sender, FileSystemEventArgs e)
         {
-            var delay = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-            var old = Interlocked.Exchange(ref reloadDelay, delay);
+            CancellationTokenSource delay = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            CancellationTokenSource old = Interlocked.Exchange(ref reloadDelay, delay);
             try { old?.Cancel(); } catch (ObjectDisposedException) { }
             BackgroundWork.Run(async () =>
             {
                 try { await Task.Delay(350, delay.Token); await ReloadConfigurationAsync(); }
                 catch (OperationCanceledException) { }
                 catch (Exception ex) { ShaderOutput.Log("Settings reload failed: " + ex.Message); }
-                finally { Interlocked.CompareExchange(ref reloadDelay, null, delay); delay.Dispose(); }
+                finally { _=Interlocked.CompareExchange(ref reloadDelay, null, delay); delay.Dispose(); }
             }, "ShaderTools/ConfigurationReload");
         }
 
-        private void OnOptionsChanged(object sender, EventArgs e) => BackgroundWork.Run(async () =>
+        private void OnOptionsChanged(object sender, EventArgs e)
+        {
+            BackgroundWork.Run(async () =>
         {
             try { await ReloadConfigurationAsync(); }
             catch (Exception ex) { ShaderOutput.Log(ex.Message); }
         }, "ShaderTools/OptionsReload");
+        }
 
         private void SetState(bool ready, string status)
         {
@@ -289,9 +393,13 @@ namespace ShaderTools.VisualStudio.LanguageClient
 
         private async Task StopProcessAsync()
         {
-            var previous = process;
+            Process previous = process;
             process = null;
-            if (previous == null) return;
+            if (previous == null)
+            {
+                return;
+            }
+
             await Task.Run(() =>
             {
                 try
@@ -299,24 +407,43 @@ namespace ShaderTools.VisualStudio.LanguageClient
                     if (!previous.HasExited)
                     {
                         previous.StandardInput.Close();
-                        if (!previous.WaitForExit(4000)) previous.Kill();
+                        if (!previous.WaitForExit(4000))
+                        {
+                            previous.Kill();
+                        }
                     }
                 }
-                catch (Exception ex) when (ex is InvalidOperationException || ex is IOException) { ShaderOutput.Log(ex.Message); }
+                catch (Exception ex) when (ex is InvalidOperationException or IOException) { ShaderOutput.Log(ex.Message); }
                 finally { previous.Dispose(); }
             });
         }
 
         private static string FindFormatDirectory(string configured)
         {
-            if (!string.IsNullOrWhiteSpace(configured)) return File.Exists(Path.Combine(configured, "clang-format.exe")) ? configured : null;
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                return File.Exists(Path.Combine(configured, "clang-format.exe")) ? configured : null;
+            }
+
             string ide = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
             string install = Path.GetFullPath(Path.Combine(ide, "..", ".."));
             foreach (string candidate in new[] { Path.Combine(install, "VC", "Tools", "Llvm", "x64", "bin"), Path.Combine(install, "VC", "Tools", "Llvm", "bin") })
-                if (File.Exists(Path.Combine(candidate, "clang-format.exe"))) return candidate;
+            {
+                if (File.Exists(Path.Combine(candidate, "clang-format.exe")))
+                {
+                    return candidate;
+                }
+            }
+
             foreach (string candidate in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
             {
-                try { if (File.Exists(Path.Combine(candidate.Trim('"'), "clang-format.exe"))) return candidate.Trim('"'); }
+                try
+                {
+                    if (File.Exists(Path.Combine(candidate.Trim('"'), "clang-format.exe")))
+                    {
+                        return candidate.Trim('"');
+                    }
+                }
                 catch (ArgumentException) { }
             }
             return null;
@@ -324,24 +451,35 @@ namespace ShaderTools.VisualStudio.LanguageClient
 
         public void Dispose()
         {
-            if (disposed) return;
+            if (disposed)
+            {
+                return;
+            }
+
             disposed = true;
             lifetime.Cancel();
             configurationWatcher?.Dispose();
             ShaderOptions.Changed -= OnOptionsChanged;
-            var monitor = workspaceMonitor;
+            WorkspaceMonitor monitor = workspaceMonitor;
             workspaceMonitor = null;
-            if (monitor != null) BackgroundWork.Run(async () =>
+            if (monitor != null)
+            {
+                BackgroundWork.Run(async () =>
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 monitor.Dispose();
             }, "ShaderTools/WorkspaceMonitorDispose");
-            var previous = process;
+            }
+
+            Process previous = process;
             process = null;
             // Closing stdin allows the bridge to stop its compiler process without blocking VS teardown.
-            try { previous?.StandardInput.Close(); } catch (Exception ex) when (ex is InvalidOperationException || ex is IOException) { }
+            try { previous?.StandardInput.Close(); } catch (Exception ex) when (ex is InvalidOperationException or IOException) { }
             previous?.Dispose();
-            if (ReferenceEquals(Instance, this)) Instance = null;
+            if (ReferenceEquals(Instance, this))
+            {
+                Instance = null;
+            }
         }
     }
 
@@ -349,20 +487,37 @@ namespace ShaderTools.VisualStudio.LanguageClient
     {
         private readonly ShaderLanguageClient owner;
         public ShaderMiddleLayer(ShaderLanguageClient owner) { this.owner = owner; }
-        public bool CanHandle(string methodName) => methodName == "textDocument/didOpen" || methodName == "textDocument/didClose";
+        public bool CanHandle(string methodName)
+        {
+            return methodName is "textDocument/didOpen" or "textDocument/didClose";
+        }
+
         public async Task HandleNotificationAsync(string methodName, JToken methodParam, Func<JToken, Task> sendNotification)
         {
             await sendNotification(methodParam);
             string uri = (string)methodParam.SelectToken("textDocument.uri");
-            if (uri != null && methodName == "textDocument/didOpen") owner.DocumentOpened(uri);
-            if (uri != null && methodName == "textDocument/didClose") owner.DocumentClosed(uri);
+            if (uri != null && methodName == "textDocument/didOpen")
+            {
+                owner.DocumentOpened(uri);
+            }
+
+            if (uri != null && methodName == "textDocument/didClose")
+            {
+                owner.DocumentClosed(uri);
+            }
         }
-        public Task<JToken> HandleRequestAsync(string methodName, JToken methodParam, Func<JToken, Task<JToken>> sendRequest) => sendRequest(methodParam);
+        public Task<JToken> HandleRequestAsync(string methodName, JToken methodParam, Func<JToken, Task<JToken>> sendRequest)
+        {
+            return sendRequest(methodParam);
+        }
     }
 
     internal sealed class ShaderCustomMessageTarget
     {
         [JsonRpcMethod("shaderTools/diagnostics", UseSingleObjectParameterDeserialization = true)]
-        public void Diagnostics(JToken parameters) => ShaderDiagnostics.Update(parameters);
+        public void Diagnostics(JToken parameters)
+        {
+            ShaderDiagnostics.Update(parameters);
+        }
     }
 }

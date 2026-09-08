@@ -1,6 +1,6 @@
-using System;
 using Microsoft.VisualStudio.Text;
 using Newtonsoft.Json.Linq;
+using System;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -18,7 +18,7 @@ namespace ShaderTools.VisualStudio.Editor
 
         public int CompareTo(LspTextPosition other)
         {
-            var lineComparison = Line.CompareTo(other.Line);
+            int lineComparison = Line.CompareTo(other.Line);
             return lineComparison != 0 ? lineComparison : Character.CompareTo(other.Character);
         }
     }
@@ -38,9 +38,9 @@ namespace ShaderTools.VisualStudio.Editor
         internal static bool TryParse(JToken token, out LspTextRange range)
         {
             range = default;
-            if (!(token is JObject rangeObject) ||
-                !TryParsePosition(rangeObject["start"], out var start) ||
-                !TryParsePosition(rangeObject["end"], out var end) ||
+            if (token is not JObject rangeObject ||
+                !TryParsePosition(rangeObject["start"], out LspTextPosition start) ||
+                !TryParsePosition(rangeObject["end"], out LspTextPosition end) ||
                 start.CompareTo(end) >= 0)
             {
                 return false;
@@ -53,8 +53,8 @@ namespace ShaderTools.VisualStudio.Editor
         internal bool TryGetSpan(ITextSnapshot snapshot, out Span span)
         {
             span = default;
-            if (!TryGetOffset(snapshot, Start, out var start) ||
-                !TryGetOffset(snapshot, End, out var end) ||
+            if (!TryGetOffset(snapshot, Start, out int start) ||
+                !TryGetOffset(snapshot, End, out int end) ||
                 end <= start)
             {
                 return false;
@@ -67,9 +67,9 @@ namespace ShaderTools.VisualStudio.Editor
         private static bool TryParsePosition(JToken token, out LspTextPosition position)
         {
             position = default;
-            if (!(token is JObject positionObject) ||
-                !TryReadNonNegativeInt(positionObject["line"], out var line) ||
-                !TryReadNonNegativeInt(positionObject["character"], out var character))
+            if (token is not JObject positionObject ||
+                !TryReadNonNegativeInt(positionObject["line"], out int line) ||
+                !TryReadNonNegativeInt(positionObject["character"], out int character))
             {
                 return false;
             }
@@ -86,8 +86,8 @@ namespace ShaderTools.VisualStudio.Editor
                 return false;
             }
 
-            var longValue = token.Value<long>();
-            if (longValue < 0 || longValue > int.MaxValue)
+            long longValue = token.Value<long>();
+            if (longValue is <0 or >int.MaxValue)
             {
                 return false;
             }
@@ -104,7 +104,7 @@ namespace ShaderTools.VisualStudio.Editor
                 return false;
             }
 
-            var line = snapshot.GetLineFromLineNumber(position.Line);
+            ITextSnapshotLine line = snapshot.GetLineFromLineNumber(position.Line);
             if (position.Character < 0 || position.Character > line.Length)
             {
                 return false;

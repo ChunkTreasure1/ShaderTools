@@ -1,3 +1,10 @@
+using Microsoft.VisualStudio.Text;
+using Microsoft.VisualStudio.Text.Classification;
+using Microsoft.VisualStudio.Text.Editor;
+using Microsoft.VisualStudio.Text.Tagging;
+using Microsoft.VisualStudio.Utilities;
+using Newtonsoft.Json.Linq;
+using ShaderTools.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -6,13 +13,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using Microsoft.VisualStudio.Text;
-using Microsoft.VisualStudio.Text.Classification;
-using Microsoft.VisualStudio.Text.Editor;
-using Microsoft.VisualStudio.Text.Tagging;
-using Microsoft.VisualStudio.Utilities;
-using Newtonsoft.Json.Linq;
-using ShaderTools.Core.Editor;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -42,15 +42,15 @@ namespace ShaderTools.VisualStudio.Editor
         public ITagger<T> CreateTagger<T>(ITextView textView, ITextBuffer buffer) where T : ITag
         {
             if (typeof(T) != typeof(IntraTextAdornmentTag) ||
-                !(textView is IWpfTextView wpfView) ||
+                textView is not IWpfTextView wpfView ||
                 !ReferenceEquals(textView.TextBuffer, buffer))
             {
                 return null;
             }
 
-            var state = manager.GetOrCreate(buffer);
-            var documentUri = state.DocumentUri;
-            var tagger = new ShaderInlayHintTagger(
+            ShaderEditorBufferState state = manager.GetOrCreate(buffer);
+            string documentUri = state.DocumentUri;
+            ShaderInlayHintTagger tagger = new ShaderInlayHintTagger(
                 wpfView,
                 buffer,
                 state,
@@ -78,7 +78,7 @@ namespace ShaderTools.VisualStudio.Editor
         private readonly InlayHintCache cache = new InlayHintCache();
         // WPF adornments belong to this view and are only accessed on its UI thread.
         private readonly Dictionary<object, IntraTextAdornmentTag> adornments =
-            new Dictionary<object, IntraTextAdornmentTag>();
+            [];
         private long generation;
         private bool catalogLoaded;
         private bool disposed;
@@ -115,7 +115,7 @@ namespace ShaderTools.VisualStudio.Editor
                 yield break;
             }
 
-            var snapshot = spans[0].Snapshot;
+            ITextSnapshot snapshot = spans[0].Snapshot;
             IReadOnlyList<ParameterHint> current;
             lock (gate)
             {
@@ -128,14 +128,14 @@ namespace ShaderTools.VisualStudio.Editor
             }
 
             PruneAdornments(current);
-            foreach (var hint in current)
+            foreach (ParameterHint hint in current)
             {
-                if (!TryGetPosition(hint, snapshot, out var position) || !Contains(spans, position))
+                if (!TryGetPosition(hint, snapshot, out int position) || !Contains(spans, position))
                 {
                     continue;
                 }
 
-                if (!adornments.TryGetValue(hint.Identity, out var tag))
+                if (!adornments.TryGetValue(hint.Identity, out IntraTextAdornmentTag tag))
                 {
                     tag = new IntraTextAdornmentTag(new TextBlock
                     {
@@ -147,8 +147,8 @@ namespace ShaderTools.VisualStudio.Editor
                     }, null, PositionAffinity.Successor);
                     adornments.Add(hint.Identity, tag);
                 }
-                var properties = formatMap.DefaultTextProperties;
-                var adornment = (TextBlock)tag.Adornment;
+                Microsoft.VisualStudio.Text.Formatting.TextFormattingRunProperties properties = formatMap.DefaultTextProperties;
+                TextBlock adornment = (TextBlock)tag.Adornment;
                 adornment.FontFamily = properties.Typeface.FontFamily;
                 adornment.FontSize = properties.FontRenderingEmSize * 0.9;
                 adornment.Foreground = properties.ForegroundBrush;
@@ -160,13 +160,21 @@ namespace ShaderTools.VisualStudio.Editor
 
         public void OnClientReadinessChanged()
         {
-            lock (gate) catalogLoaded = false;
+            lock (gate)
+            {
+                catalogLoaded = false;
+            }
+
             ScheduleRefresh(0);
         }
 
         public void OnShaderOptionsChanged()
         {
-            lock (gate) catalogLoaded = false;
+            lock (gate)
+            {
+                catalogLoaded = false;
+            }
+
             ScheduleRefresh(0);
         }
 
@@ -187,13 +195,17 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
-            var edits = e.Changes.Select(change => new InlayHintEdit(
+            InlayHintEdit[] edits = e.Changes.Select(change => new InlayHintEdit(
                 change.OldPosition, change.OldLength, change.NewText)).ToArray();
             bool mapped;
             IReadOnlyList<int> affectedLines;
             lock (gate)
             {
-                if (disposed) return;
+                if (disposed)
+                {
+                    return;
+                }
+
                 mapped = cache.Version == e.Before.Version.VersionNumber;
                 affectedLines = cache.ApplyEdits(e.Before.Version.VersionNumber,
                     e.After.Version.VersionNumber, edits, e.After.GetText());
@@ -201,20 +213,27 @@ namespace ShaderTools.VisualStudio.Editor
                 if (e.Changes.Any(change =>
                     e.Before.GetLineFromPosition(change.OldPosition).GetText().TrimStart().StartsWith("#") ||
                     e.After.GetLineFromPosition(change.NewPosition).GetText().TrimStart().StartsWith("#") ||
-                    change.NewText.Contains("#") || change.OldText.Contains("#"))) catalogLoaded = false;
+                    change.NewText.Contains("#") || change.OldText.Contains("#")))
+                {
+                    catalogLoaded = false;
+                }
             }
 
             if (mapped)
             {
-                var changedLines = e.Changes.SelectMany(change =>
+                int[] changedLines = e.Changes.SelectMany(change =>
                 {
-                    var first = e.After.GetLineFromPosition(change.NewPosition).LineNumber;
-                    var last = e.After.GetLineFromPosition(change.NewEnd).LineNumber;
+                    int first = e.After.GetLineFromPosition(change.NewPosition).LineNumber;
+                    int last = e.After.GetLineFromPosition(change.NewEnd).LineNumber;
                     return Enumerable.Range(first, last - first + 1);
                 }).Concat(affectedLines).Distinct().ToArray();
                 RaiseTagsChanged(e.After, changedLines);
             }
-            else RaiseTagsChanged();
+            else
+            {
+                RaiseTagsChanged();
+            }
+
             ScheduleRefresh(DebounceMilliseconds);
         }
 
@@ -235,7 +254,7 @@ namespace ShaderTools.VisualStudio.Editor
             CancellationTokenSource currentCancellation = null;
             ITextSnapshot snapshot = null;
             long requestGeneration = 0;
-            var enabled = Options.ShaderOptions.Current.EnableInlayHints;
+            bool enabled = Options.ShaderOptions.Current.EnableInlayHints;
 
             lock (gate)
             {
@@ -263,7 +282,11 @@ namespace ShaderTools.VisualStudio.Editor
             }
 
             Cancel(previousCancellation);
-            if (clear || !enabled) RaiseTagsChanged();
+            if (clear || !enabled)
+            {
+                RaiseTagsChanged();
+            }
+
             if (currentCancellation != null)
             {
                 _ = RefreshAsync(snapshot, requestGeneration, delayMilliseconds, currentCancellation);
@@ -301,14 +324,14 @@ namespace ShaderTools.VisualStudio.Editor
                     return;
                 }
 
-                var client = LanguageClient.ShaderLanguageClient.Instance;
+                LanguageClient.ShaderLanguageClient client = LanguageClient.ShaderLanguageClient.Instance;
                 if (client == null || !client.IsReady)
                 {
                     return;
                 }
 
-                var lastLine = snapshot.GetLineFromLineNumber(snapshot.LineCount - 1);
-                var parameters = new JObject
+                ITextSnapshotLine lastLine = snapshot.GetLineFromLineNumber(snapshot.LineCount - 1);
+                JObject parameters = new JObject
                 {
                     ["textDocument"] = new JObject { ["uri"] = requestUri },
                     ["range"] = new JObject
@@ -321,19 +344,19 @@ namespace ShaderTools.VisualStudio.Editor
                         },
                     },
                 };
-                var response = await client.RequestAsync(
+                JToken response = await client.RequestAsync(
                     "textDocument/inlayHint",
                     parameters,
                     cancellation.Token).ConfigureAwait(false);
 
                 cancellation.Token.ThrowIfCancellationRequested();
-                var parsedHints = ParseHints(response, snapshot);
+                IReadOnlyList<ParameterHint> parsedHints = ParseHints(response, snapshot);
                 IReadOnlyList<string> declarations = null;
                 if (loadCatalog)
                 {
                     try
                     {
-                        var completion = await client.RequestAsync("textDocument/completion", new JObject
+                        JToken completion = await client.RequestAsync("textDocument/completion", new JObject
                         {
                             ["textDocument"] = new JObject { ["uri"] = requestUri },
                             ["position"] = new JObject { ["line"] = lastLine.LineNumber, ["character"] = lastLine.Length },
@@ -392,30 +415,30 @@ namespace ShaderTools.VisualStudio.Editor
 
         private static IReadOnlyList<ParameterHint> ParseHints(JToken response, ITextSnapshot snapshot)
         {
-            var array = response as JArray ?? response?["result"] as JArray;
+            JArray array = response as JArray ?? response?["result"] as JArray;
             if (array == null || array.Count == 0)
             {
                 return Array.Empty<ParameterHint>();
             }
 
-            var result = new List<ParameterHint>(Math.Min(array.Count, MaximumHints));
-            foreach (var token in array.Take(MaximumHints))
+            List<ParameterHint> result = new List<ParameterHint>(Math.Min(array.Count, MaximumHints));
+            foreach (JToken token in array.Take(MaximumHints))
             {
-                if (!(token is JObject item) ||
-                    !TryReadPosition(item["position"], out var position) ||
+                if (token is not JObject item ||
+                    !TryReadPosition(item["position"], out LspTextPosition position) ||
                     position.Line >= snapshot.LineCount ||
                     position.Character > snapshot.GetLineFromLineNumber(position.Line).Length)
                 {
                     continue;
                 }
 
-                var kind = ReadInteger(item["kind"]);
+                int? kind = ReadInteger(item["kind"]);
                 if (kind.HasValue && kind.Value != 2) // LSP InlayHintKind.Parameter
                 {
                     continue;
                 }
 
-                var label = ReadLabel(item["label"]);
+                string label = ReadLabel(item["label"]);
                 if (string.IsNullOrWhiteSpace(label))
                 {
                     continue;
@@ -440,9 +463,9 @@ namespace ShaderTools.VisualStudio.Editor
         private static bool TryReadPosition(JToken token, out LspTextPosition position)
         {
             position = default;
-            if (!(token is JObject value) ||
-                !LspTextRange.TryReadNonNegativeInt(value["line"], out var line) ||
-                !LspTextRange.TryReadNonNegativeInt(value["character"], out var character))
+            if (token is not JObject value ||
+                !LspTextRange.TryReadNonNegativeInt(value["line"], out int line) ||
+                !LspTextRange.TryReadNonNegativeInt(value["character"], out int character))
             {
                 return false;
             }
@@ -458,7 +481,7 @@ namespace ShaderTools.VisualStudio.Editor
                 return token.Value<string>();
             }
 
-            if (!(token is JArray parts))
+            if (token is not JArray parts)
             {
                 return null;
             }
@@ -476,13 +499,13 @@ namespace ShaderTools.VisualStudio.Editor
                 return null;
             }
 
-            var value = token.Value<long>();
-            return value >= int.MinValue && value <= int.MaxValue ? (int?)value : null;
+            long value = token.Value<long>();
+            return value is >=int.MinValue and <=int.MaxValue ? (int?)value : null;
         }
 
         private static bool Contains(NormalizedSnapshotSpanCollection spans, int position)
         {
-            foreach (var span in spans)
+            foreach (SnapshotSpan span in spans)
             {
                 if (position >= span.Start.Position && position <= span.End.Position)
                 {
@@ -518,22 +541,34 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void RaiseTagsChanged(ITextSnapshot snapshot, IReadOnlyList<int> changedLines)
         {
-            if (changedLines.Count == 0) return;
+            if (changedLines.Count == 0)
+            {
+                return;
+            }
+
             ShaderUiNotifications.Post(() =>
             {
                 EventHandler<SnapshotSpanEventArgs> handler;
                 ITextSnapshot current;
                 lock (gate)
                 {
-                    if (disposed) return;
+                    if (disposed)
+                    {
+                        return;
+                    }
+
                     handler = TagsChanged;
                     current = buffer.CurrentSnapshot;
                     PruneAdornments(cache.Hints);
                 }
-                foreach (var number in changedLines)
+                foreach (int number in changedLines)
                 {
-                    if (number < 0 || number >= snapshot.LineCount) continue;
-                    var line = snapshot.GetLineFromLineNumber(number).ExtentIncludingLineBreak;
+                    if (number < 0 || number >= snapshot.LineCount)
+                    {
+                        continue;
+                    }
+
+                    SnapshotSpan line = snapshot.GetLineFromLineNumber(number).ExtentIncludingLineBreak;
                     handler?.Invoke(this, new SnapshotSpanEventArgs(
                         line.TranslateTo(current, SpanTrackingMode.EdgeInclusive)));
                 }
@@ -542,9 +577,11 @@ namespace ShaderTools.VisualStudio.Editor
 
         private void PruneAdornments(IReadOnlyList<ParameterHint> current)
         {
-            var identities = new HashSet<object>(current.Select(hint => hint.Identity));
-            foreach (var identity in adornments.Keys.Where(key => !identities.Contains(key)).ToArray())
-                adornments.Remove(identity);
+            HashSet<object> identities = [.. current.Select(hint => hint.Identity)];
+            foreach (object identity in adornments.Keys.Where(key => !identities.Contains(key)).ToArray())
+            {
+                _=adornments.Remove(identity);
+            }
         }
 
         public void Dispose()
@@ -571,7 +608,7 @@ namespace ShaderTools.VisualStudio.Editor
             ShaderOptionChanges.Unregister(this);
             ownerState.UnregisterUriListener(this);
             Cancel(cancellation);
-            ShaderUiNotifications.Post(() => adornments.Clear());
+            ShaderUiNotifications.Post(adornments.Clear);
         }
 
         private static void Cancel(CancellationTokenSource cancellation)
@@ -589,9 +626,17 @@ namespace ShaderTools.VisualStudio.Editor
         private static bool TryGetPosition(ParameterHint hint, ITextSnapshot snapshot, out int position)
         {
             position = 0;
-            if (hint.Line >= snapshot.LineCount) return false;
-            var line = snapshot.GetLineFromLineNumber(hint.Line);
-            if (hint.Character > line.Length) return false;
+            if (hint.Line >= snapshot.LineCount)
+            {
+                return false;
+            }
+
+            ITextSnapshotLine line = snapshot.GetLineFromLineNumber(hint.Line);
+            if (hint.Character > line.Length)
+            {
+                return false;
+            }
+
             position = line.Start.Position + hint.Character;
             return true;
         }

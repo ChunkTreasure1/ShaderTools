@@ -1,9 +1,9 @@
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace ShaderTools.Core.Configuration;
 
@@ -15,25 +15,23 @@ internal static class ConfigurationJson
     {
         try
         {
-            using (var stream = File.OpenRead(filePath))
-            using (var textReader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true))
-            using (var jsonReader = new JsonTextReader(textReader))
-            {
-                var result = JToken.Load(
-                    jsonReader,
-                    new JsonLoadSettings
-                    {
-                        DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error,
-                        LineInfoHandling = LineInfoHandling.Load,
-                    });
-
-                if (jsonReader.Read())
+            using FileStream stream = File.OpenRead(filePath);
+            using StreamReader textReader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
+            using JsonTextReader jsonReader = new JsonTextReader(textReader);
+            JToken result = JToken.Load(
+                jsonReader,
+                new JsonLoadSettings
                 {
-                    throw new JsonReaderException("Additional JSON content follows the root value.");
-                }
+                    DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error,
+                    LineInfoHandling = LineInfoHandling.Load,
+                });
 
-                return result;
+            if (jsonReader.Read())
+            {
+                throw new JsonReaderException("Additional JSON content follows the root value.");
             }
+
+            return result;
         }
         catch (JsonException exception)
         {
@@ -47,14 +45,14 @@ internal static class ConfigurationJson
 
     public static string RequireString(JObject value, string propertyName, string filePath, string path, bool allowEmpty = false)
     {
-        var token = value[propertyName];
-        var propertyPath = JoinPath(path, propertyName);
+        JToken? token = value[propertyName];
+        string propertyPath = JoinPath(path, propertyName);
         if (token == null || token.Type != JTokenType.String)
         {
             throw Invalid(filePath, propertyPath, "must be a string");
         }
 
-        var result = token.Value<string>()!;
+        string result = token.Value<string>()!;
         if (!allowEmpty && string.IsNullOrWhiteSpace(result))
         {
             throw Invalid(filePath, propertyPath, "must not be empty");
@@ -65,14 +63,14 @@ internal static class ConfigurationJson
 
     public static JObject OptionalStringMap(JObject value, string propertyName, string filePath, string path)
     {
-        var token = value[propertyName];
-        var propertyPath = JoinPath(path, propertyName);
+        JToken? token = value[propertyName];
+        string propertyPath = JoinPath(path, propertyName);
         if (token == null)
         {
-            return new JObject();
+            return [];
         }
 
-        if (!(token is JObject result))
+        if (token is not JObject result)
         {
             throw Invalid(filePath, propertyPath, "must be an object whose values are strings");
         }
@@ -83,19 +81,19 @@ internal static class ConfigurationJson
 
     public static JArray OptionalStringArray(JObject value, string propertyName, string filePath, string path)
     {
-        var token = value[propertyName];
-        var propertyPath = JoinPath(path, propertyName);
+        JToken? token = value[propertyName];
+        string propertyPath = JoinPath(path, propertyName);
         if (token == null)
         {
-            return new JArray();
+            return [];
         }
 
-        if (!(token is JArray result))
+        if (token is not JArray result)
         {
             throw Invalid(filePath, propertyPath, "must be an array of strings");
         }
 
-        for (var index = 0; index < result.Count; index++)
+        for (int index = 0; index < result.Count; index++)
         {
             if (result[index].Type != JTokenType.String)
             {
@@ -108,7 +106,7 @@ internal static class ConfigurationJson
 
     public static void ValidateStringMap(JObject map, string filePath, string path)
     {
-        foreach (var property in map.Properties())
+        foreach (JProperty property in map.Properties())
         {
             if (property.Value.Type != JTokenType.String)
             {
@@ -119,10 +117,10 @@ internal static class ConfigurationJson
 
     public static string ResolveText(string value, string workspaceRoot, string filePath, string propertyPath)
     {
-        var userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var result = PlaceholderPattern.Replace(value, match =>
+        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string result = PlaceholderPattern.Replace(value, match =>
         {
-            var placeholder = match.Groups[1].Value;
+            string placeholder = match.Groups[1].Value;
             if (string.Equals(placeholder, "workspaceFolder", StringComparison.Ordinal))
             {
                 return workspaceRoot;
@@ -141,13 +139,13 @@ internal static class ConfigurationJson
             const string environmentPrefix = "env:";
             if (placeholder.StartsWith(environmentPrefix, StringComparison.Ordinal))
             {
-                var variableName = placeholder.Substring(environmentPrefix.Length);
+                string variableName = placeholder.Substring(environmentPrefix.Length);
                 if (variableName.Length == 0)
                 {
                     throw Invalid(filePath, propertyPath, "contains an empty environment variable placeholder");
                 }
 
-                var environmentValue = Environment.GetEnvironmentVariable(variableName);
+                string environmentValue = Environment.GetEnvironmentVariable(variableName);
                 if (environmentValue == null)
                 {
                     throw Invalid(filePath, propertyPath, $"cannot resolve environment variable '{variableName}'");
@@ -169,7 +167,7 @@ internal static class ConfigurationJson
 
     public static string ResolvePath(string value, string baseDirectory, string workspaceRoot, string filePath, string propertyPath)
     {
-        var expanded = ResolveText(value, workspaceRoot, filePath, propertyPath);
+        string expanded = ResolveText(value, workspaceRoot, filePath, propertyPath);
         if (expanded.Length == 0)
         {
             return expanded;
@@ -179,7 +177,7 @@ internal static class ConfigurationJson
         {
             return Path.GetFullPath(Path.IsPathRooted(expanded) ? expanded : Path.Combine(baseDirectory, expanded));
         }
-        catch (Exception exception) when (exception is ArgumentException || exception is NotSupportedException || exception is PathTooLongException)
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
         {
             throw new InvalidDataException(
                 $"Invalid configuration in '{filePath}' at '{propertyPath}': '{value}' is not a valid path.",
@@ -199,7 +197,7 @@ internal static class ConfigurationJson
 
     public static void RejectUnknownProperties(JObject value, ISet<string> allowed, string filePath, string path)
     {
-        foreach (var property in value.Properties())
+        foreach (JProperty property in value.Properties())
         {
             if (!allowed.Contains(property.Name))
             {

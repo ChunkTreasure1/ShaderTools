@@ -1,5 +1,11 @@
+using Microsoft.VisualStudio.Shell;
+using Microsoft.Win32;
+using Newtonsoft.Json.Linq;
+using ShaderTools.Core.Configuration;
+using ShaderTools.VisualStudio.Commands;
+using ShaderTools.VisualStudio.LanguageClient;
+using ShaderTools.VisualStudio.Services;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -7,13 +13,6 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using ShaderTools.VisualStudio.Commands;
-using ShaderTools.VisualStudio.LanguageClient;
-using ShaderTools.VisualStudio.Services;
-using Microsoft.VisualStudio.Shell;
-using Microsoft.Win32;
-using Newtonsoft.Json.Linq;
-using ShaderTools.Core.Configuration;
 
 namespace ShaderTools.VisualStudio.ToolWindows
 {
@@ -39,18 +38,18 @@ namespace ShaderTools.VisualStudio.ToolWindows
         {
             SetResourceReference(BackgroundProperty, VsBrushes.ToolWindowBackgroundKey);
             SetResourceReference(ForegroundProperty, VsBrushes.ToolWindowTextKey);
-            var root = new DockPanel();
-            var heading = new StackPanel();
-            heading.Children.Add(new TextBlock { Text = "SHADER TOOLS", FontSize = 11, FontWeight = FontWeights.Bold, Margin = new Thickness(12, 12, 12, 0), Opacity = 0.7 });
-            heading.Children.Add(status);
+            DockPanel root = new DockPanel();
+            StackPanel heading = new StackPanel();
+            _=heading.Children.Add(new TextBlock { Text = "SHADER TOOLS", FontSize = 11, FontWeight = FontWeights.Bold, Margin = new Thickness(12, 12, 12, 0), Opacity = 0.7 });
+            _=heading.Children.Add(status);
             DockPanel.SetDock(heading, Dock.Top);
-            root.Children.Add(heading);
+            _=root.Children.Add(heading);
             DockPanel.SetDock(notice, Dock.Bottom);
-            root.Children.Add(notice);
-            var tabs = new TabControl();
-            tabs.Items.Add(new TabItem { Header = "Variants", Content = BuildVariantPage() });
-            tabs.Items.Add(new TabItem { Header = "Symbols", Content = BuildSymbolPage() });
-            root.Children.Add(tabs);
+            _=root.Children.Add(notice);
+            TabControl tabs = new TabControl();
+            _=tabs.Items.Add(new TabItem { Header = "Variants", Content = BuildVariantPage() });
+            _=tabs.Items.Add(new TabItem { Header = "Symbols", Content = BuildSymbolPage() });
+            _=root.Children.Add(tabs);
             Content = root;
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
@@ -69,45 +68,48 @@ namespace ShaderTools.VisualStudio.ToolWindows
 
         private UIElement BuildVariantPage()
         {
-            var panel = new DockPanel();
-            var tools = new WrapPanel { Margin = new Thickness(8, 8, 8, 0) };
-            tools.Children.Add(Button("Activate", "Use the selected entry point, stage and macros", ActivateSelectedAsync));
-            tools.Children.Add(Button("Automatic", "Clear the pinned variant context", ClearVariantAsync));
-            tools.Children.Add(Button("Refresh", "Reload the variant database", ReloadVariantsAsync));
-            tools.Children.Add(Button("Edit…", "Create or edit project variants", () => ShaderCommands.EditProjectFileAsync(true)));
-            tools.Children.Add(Button("Load…", "Load a Shader Tools or shader-validator variant database", LoadCatalogAsync));
-            DockPanel.SetDock(tools, Dock.Top); panel.Children.Add(tools);
-            DockPanel.SetDock(active, Dock.Top); panel.Children.Add(active);
-            DockPanel.SetDock(detail, Dock.Bottom); panel.Children.Add(detail);
-            panel.Children.Add(variants);
+            DockPanel panel = new DockPanel();
+            WrapPanel tools = new WrapPanel { Margin = new Thickness(8, 8, 8, 0) };
+            _=tools.Children.Add(Button("Activate", "Use the selected entry point, stage and macros", ActivateSelectedAsync));
+            _=tools.Children.Add(Button("Automatic", "Clear the pinned variant context", ClearVariantAsync));
+            _=tools.Children.Add(Button("Refresh", "Reload the variant database", ReloadVariantsAsync));
+            _=tools.Children.Add(Button("Edit…", "Create or edit project variants", () => ShaderCommands.EditProjectFileAsync(true)));
+            _=tools.Children.Add(Button("Load…", "Load a Shader Tools or shader-validator variant database", LoadCatalogAsync));
+            DockPanel.SetDock(tools, Dock.Top); _=panel.Children.Add(tools);
+            DockPanel.SetDock(active, Dock.Top); _=panel.Children.Add(active);
+            DockPanel.SetDock(detail, Dock.Bottom); _=panel.Children.Add(detail);
+            _=panel.Children.Add(variants);
             return panel;
         }
 
         private UIElement BuildSymbolPage()
         {
-            var panel = new DockPanel();
-            var tools = new WrapPanel { Margin = new Thickness(8) };
-            tools.Children.Add(Button("Current file", "List symbols in the active shader", LoadDocumentSymbolsAsync));
-            tools.Children.Add(search);
-            tools.Children.Add(Button("Search", "Search symbols in the shader workspace", LoadWorkspaceSymbolsAsync));
+            DockPanel panel = new DockPanel();
+            WrapPanel tools = new WrapPanel { Margin = new Thickness(8) };
+            _=tools.Children.Add(Button("Current file", "List symbols in the active shader", LoadDocumentSymbolsAsync));
+            _=tools.Children.Add(search);
+            _=tools.Children.Add(Button("Search", "Search symbols in the shader workspace", LoadWorkspaceSymbolsAsync));
             search.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Run(LoadWorkspaceSymbolsAsync); e.Handled = true; } };
-            DockPanel.SetDock(tools, Dock.Top); panel.Children.Add(tools); panel.Children.Add(symbols);
+            DockPanel.SetDock(tools, Dock.Top); _=panel.Children.Add(tools); _=panel.Children.Add(symbols);
             return panel;
         }
 
         private Button Button(string text, string tooltip, Func<Task> action)
         {
-            var button = new Button { Content = text, ToolTip = tooltip, Margin = new Thickness(2), Padding = new Thickness(8, 4, 8, 4), MinHeight = 26 };
+            Button button = new Button { Content = text, ToolTip = tooltip, Margin = new Thickness(2), Padding = new Thickness(8, 4, 8, 4), MinHeight = 26 };
             button.Click += (_, __) => Run(action);
             return button;
         }
 
-        private void Run(Func<Task> action) => BackgroundWork.Run(async () =>
+        private void Run(Func<Task> action)
+        {
+            BackgroundWork.Run(async () =>
         {
             try { notice.Text = ""; await action(); }
             catch (OperationCanceledException) { }
             catch (Exception ex) { await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(); notice.Text = ex.Message; ShaderOutput.Log(ex.Message); }
         }, "ShaderTools/Explorer");
+        }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
@@ -133,7 +135,7 @@ namespace ShaderTools.VisualStudio.ToolWindows
         private void UpdateStatus()
         {
             status.Text = ShaderLanguageClient.Instance?.Status ?? "Open a GLSL or HLSL shader to start. F12 jumps to definitions; Ctrl+Space opens completions.";
-            var variant = activated;
+            ShaderVariant variant = activated;
             active.Text = variant == null ? "Automatic shader context" : "Active: " + variant.Name + " · " + variant.EntryPoint + " · " + (variant.Stage ?? "auto");
         }
 
@@ -143,90 +145,140 @@ namespace ShaderTools.VisualStudio.ToolWindows
             string root = await WorkspaceContext.GetRootAsync();
             if (string.IsNullOrEmpty(root)) { notice.Text = "Open a solution, folder or shader to load its variants."; return; }
             string path = catalogPath ?? Path.Combine(root, ".shader-variants.json");
-            var entries = await Task.Run(() => VariantCatalog.Load(path, root), lifetime.Token);
+            System.Collections.Generic.IReadOnlyList<ShaderVariant> entries = await Task.Run(() => VariantCatalog.Load(path, root), lifetime.Token);
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(lifetime.Token);
-            if (version != refreshVersion) return;
+            if (version != refreshVersion)
+            {
+                return;
+            }
+
             catalogRoot = root;
             variants.Items.Clear();
-            foreach (var group in entries.GroupBy(v => v.FilePath))
+            foreach (IGrouping<string, ShaderVariant> group in entries.GroupBy(v => v.FilePath))
             {
-                var file = new TreeViewItem { Header = Path.GetFileName(group.Key), ToolTip = group.Key, IsExpanded = true };
-                foreach (var entry in group) file.Items.Add(new TreeViewItem { Header = entry.Name + "  ·  " + (entry.Stage ?? "auto"), Tag = entry, ToolTip = entry.EntryPoint });
-                variants.Items.Add(file);
+                TreeViewItem file = new TreeViewItem { Header = Path.GetFileName(group.Key), ToolTip = group.Key, IsExpanded = true };
+                foreach (ShaderVariant entry in group)
+                {
+                    _=file.Items.Add(new TreeViewItem { Header = entry.Name + "  ·  " + (entry.Stage ?? "auto"), Tag = entry, ToolTip = entry.EntryPoint });
+                }
+
+                _=variants.Items.Add(file);
             }
-            if (entries.Count == 0) notice.Text = "No variants yet. Use Edit… to define an entry point, stage, includes and macros. Ordinary shaders work with automatic context.";
+            if (entries.Count == 0)
+            {
+                notice.Text = "No variants yet. Use Edit… to define an entry point, stage, includes and macros. Ordinary shaders work with automatic context.";
+            }
+
             if (activated != null)
             {
-                var updated = entries.FirstOrDefault(v => v.FilePath.Equals(activated.FilePath, StringComparison.OrdinalIgnoreCase) && v.Name == activated.Name);
-                if (updated != null) await ActivateAsync(updated);
-                else await ClearVariantAsync();
+                ShaderVariant updated = entries.FirstOrDefault(v => v.FilePath.Equals(activated.FilePath, StringComparison.OrdinalIgnoreCase) && v.Name == activated.Name);
+                if (updated != null)
+                {
+                    await ActivateAsync(updated);
+                }
+                else
+                {
+                    await ClearVariantAsync();
+                }
             }
         }
 
         private async Task LoadCatalogAsync()
         {
-            var dialog = new OpenFileDialog { Title = "Load shader variants", Filter = "Shader variants (*.json)|*.json", CheckFileExists = true };
-            if (dialog.ShowDialog() != true) return;
+            OpenFileDialog dialog = new OpenFileDialog { Title = "Load shader variants", Filter = "Shader variants (*.json)|*.json", CheckFileExists = true };
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
             catalogPath = dialog.FileName;
             await ReloadVariantsAsync();
         }
 
-        private Task ActivateSelectedAsync() => selected == null ? Task.CompletedTask : ActivateAsync(selected);
+        private Task ActivateSelectedAsync()
+        {
+            return selected == null ? Task.CompletedTask : ActivateAsync(selected);
+        }
+
         private async Task ActivateAsync(ShaderVariant variant)
         {
-            var client = ShaderCommands.Client();
+            ShaderLanguageClient client = ShaderCommands.Client();
             await client.SetVariantAsync(variant, lifetime.Token);
             UpdateStatus();
         }
         private async Task ClearVariantAsync()
         {
             if (ShaderLanguageClient.Instance != null)
+            {
                 await ShaderLanguageClient.Instance.SetVariantAsync(null, lifetime.Token);
+            }
+
             UpdateStatus();
         }
 
         private async Task LoadDocumentSymbolsAsync()
         {
             string file = await WorkspaceContext.GetActiveFileAsync();
-            if (ShaderContentTypes.ForPath(file) == null) throw new InvalidOperationException("Select a shader editor first.");
-            var client = ShaderCommands.Client();
-            await client.EnsureDocumentAsync(file, lifetime.Token);
-            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
+            if (ShaderContentTypes.ForPath(file) == null)
             {
-                deadline.CancelAfter(TimeSpan.FromSeconds(15));
-                var result = await client.RequestAsync("textDocument/documentSymbol", new JObject { ["textDocument"] = new JObject { ["uri"] = new Uri(file).AbsoluteUri } }, deadline.Token);
-                symbols.Items.Clear();
-                foreach (var item in result as JArray ?? new JArray()) symbols.Items.Add(SymbolItem(item, new Uri(file).AbsoluteUri));
+                throw new InvalidOperationException("Select a shader editor first.");
+            }
+
+            ShaderLanguageClient client = ShaderCommands.Client();
+            await client.EnsureDocumentAsync(file, lifetime.Token);
+            using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            deadline.CancelAfter(TimeSpan.FromSeconds(15));
+            JToken result = await client.RequestAsync("textDocument/documentSymbol", new JObject { ["textDocument"] = new JObject { ["uri"] = new Uri(file).AbsoluteUri } }, deadline.Token);
+            symbols.Items.Clear();
+            foreach (JToken item in result as JArray ?? [])
+            {
+                _=symbols.Items.Add(SymbolItem(item, new Uri(file).AbsoluteUri));
             }
         }
         private async Task LoadWorkspaceSymbolsAsync()
         {
-            using (var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
+            using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+            deadline.CancelAfter(TimeSpan.FromSeconds(20));
+            JToken result = await ShaderCommands.Client().RequestAsync("workspace/symbol", new JObject { ["query"] = search.Text }, deadline.Token);
+            symbols.Items.Clear();
+            foreach (JToken item in result as JArray ?? [])
             {
-                deadline.CancelAfter(TimeSpan.FromSeconds(20));
-                var result = await ShaderCommands.Client().RequestAsync("workspace/symbol", new JObject { ["query"] = search.Text }, deadline.Token);
-                symbols.Items.Clear();
-                foreach (var item in result as JArray ?? new JArray()) symbols.Items.Add(SymbolItem(item, (string)item.SelectToken("location.uri")));
-                if (symbols.Items.Count == 0) notice.Text = "No matching symbols. The server searches files it has indexed; open shader entry points to include their dependencies.";
+                _=symbols.Items.Add(SymbolItem(item, (string)item.SelectToken("location.uri")));
+            }
+
+            if (symbols.Items.Count == 0)
+            {
+                notice.Text = "No matching symbols. The server searches files it has indexed; open shader entry points to include their dependencies.";
             }
         }
         private TreeViewItem SymbolItem(JToken symbol, string fallbackUri)
         {
-            var location = symbol["location"] as JObject ?? new JObject { ["uri"] = fallbackUri, ["range"] = symbol["selectionRange"] ?? symbol["range"] };
-            var item = new TreeViewItem { Header = (string)symbol["name"], ToolTip = (string)symbol["detail"] ?? (string)symbol["containerName"], Tag = location, IsExpanded = true };
-            foreach (var child in symbol["children"] as JArray ?? new JArray()) item.Items.Add(SymbolItem(child, fallbackUri));
+            JObject location = symbol["location"] as JObject ?? new JObject { ["uri"] = fallbackUri, ["range"] = symbol["selectionRange"] ?? symbol["range"] };
+            TreeViewItem item = new TreeViewItem { Header = (string)symbol["name"], ToolTip = (string)symbol["detail"] ?? (string)symbol["containerName"], Tag = location, IsExpanded = true };
+            foreach (JToken child in symbol["children"] as JArray ?? [])
+            {
+                _=item.Items.Add(SymbolItem(child, fallbackUri));
+            }
+
             return item;
         }
         private Task NavigateSymbolAsync()
         {
-            var location = (symbols.SelectedItem as TreeViewItem)?.Tag as JObject;
-            if (location == null || !Uri.TryCreate((string)location["uri"], UriKind.Absolute, out Uri uri) || !uri.IsFile) return Task.CompletedTask;
+            if ((symbols.SelectedItem as TreeViewItem)?.Tag is not JObject location || !Uri.TryCreate((string)location["uri"], UriKind.Absolute, out Uri uri) || !uri.IsFile)
+            {
+                return Task.CompletedTask;
+            }
+
             return WorkspaceContext.OpenFileAsync(uri.LocalPath, (int?)location.SelectToken("range.start.line") ?? 0, (int?)location.SelectToken("range.start.character") ?? 0);
         }
 
         public void Dispose()
         {
-            if (disposed) return;
+            if (disposed)
+            {
+                return;
+            }
+
             disposed = true;
             lifetime.Cancel();
             ShaderLanguageClient.ReadyChanged -= OnStateChanged;

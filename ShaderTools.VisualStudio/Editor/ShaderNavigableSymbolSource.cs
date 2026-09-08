@@ -1,10 +1,3 @@
-using System;
-using System.ComponentModel.Composition;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
@@ -14,6 +7,13 @@ using Newtonsoft.Json.Linq;
 using ShaderTools.Core.Protocol;
 using ShaderTools.VisualStudio.LanguageClient;
 using ShaderTools.VisualStudio.Services;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ShaderTools.VisualStudio.Editor
 {
@@ -29,7 +29,9 @@ namespace ShaderTools.VisualStudio.Editor
         [Import] internal ITextStructureNavigatorSelectorService Navigators { get; set; }
 
         public INavigableSymbolSource TryCreateNavigableSymbolSource(ITextView textView, ITextBuffer buffer)
-            => new ShaderNavigableSymbolSource(buffer, Buffers.GetOrCreate(buffer), Navigators.GetTextStructureNavigator(buffer));
+        {
+            return new ShaderNavigableSymbolSource(buffer, Buffers.GetOrCreate(buffer), Navigators.GetTextStructureNavigator(buffer));
+        }
     }
 
     internal sealed class ShaderNavigableSymbolSource : INavigableSymbolSource
@@ -48,51 +50,64 @@ namespace ShaderTools.VisualStudio.Editor
 
         public async Task<INavigableSymbol> GetNavigableSymbolAsync(SnapshotSpan triggerSpan, CancellationToken token)
         {
-            var snapshot = triggerSpan.Snapshot;
-            var client = ShaderLanguageClient.Instance;
+            ITextSnapshot snapshot = triggerSpan.Snapshot;
+            ShaderLanguageClient client = ShaderLanguageClient.Instance;
             string uri = document.DocumentUri;
             if (disposed || triggerSpan.IsEmpty || snapshot != buffer.CurrentSnapshot ||
-                string.IsNullOrEmpty(uri) || client?.IsReady != true) return null;
-
-            var line = triggerSpan.Start.GetContainingLine();
-            using (var request = CancellationTokenSource.CreateLinkedTokenSource(token))
+                string.IsNullOrEmpty(uri) || client?.IsReady != true)
             {
-                request.CancelAfter(TimeSpan.FromSeconds(3));
-                try
-                {
-                    var result = await client.RequestAsync("textDocument/definition", new JObject
-                    {
-                        ["textDocument"] = new JObject { ["uri"] = uri },
-                        ["position"] = new JObject
-                        {
-                            ["line"] = line.LineNumber,
-                            ["character"] = triggerSpan.Start.Position - line.Start.Position
-                        }
-                    }, request.Token).ConfigureAwait(false);
-                    if (disposed || request.IsCancellationRequested || snapshot != buffer.CurrentSnapshot ||
-                        !ShaderEditorBufferState.UriEquals(uri, document.DocumentUri)) return null;
+                return null;
+            }
 
-                    var target = DefinitionLocation.Read(result).FirstOrDefault();
-                    if (target == null) return null;
-                    var symbolSpan = triggerSpan;
-                    if (LspTextRange.TryParse(target.OriginRange, out var origin) &&
-                        origin.TryGetSpan(snapshot, out var span) && span.Contains(triggerSpan.Start.Position))
-                        symbolSpan = new SnapshotSpan(snapshot, span);
-                    else
-                    {
-                        var word = navigator.GetExtentOfWord(triggerSpan.Start);
-                        if (word.IsSignificant) symbolSpan = word.Span;
-                    }
-                    return new ShaderNavigableSymbol(symbolSpan, target, () =>
-                        !disposed && snapshot == buffer.CurrentSnapshot && ShaderEditorBufferState.UriEquals(uri, document.DocumentUri));
-                }
-                catch (OperationCanceledException) { return null; }
-                catch (Exception ex) when (ex is InvalidOperationException || ex is IOException ||
-                    ex is StreamJsonRpc.RemoteInvocationException || ex is StreamJsonRpc.ConnectionLostException)
+            ITextSnapshotLine line = triggerSpan.Start.GetContainingLine();
+            using CancellationTokenSource request = CancellationTokenSource.CreateLinkedTokenSource(token);
+            request.CancelAfter(TimeSpan.FromSeconds(3));
+            try
+            {
+                JToken result = await client.RequestAsync("textDocument/definition", new JObject
                 {
-                    // Navigation is queried while Ctrl is held, including during LSP startup/restarts.
+                    ["textDocument"] = new JObject { ["uri"] = uri },
+                    ["position"] = new JObject
+                    {
+                        ["line"] = line.LineNumber,
+                        ["character"] = triggerSpan.Start.Position - line.Start.Position
+                    }
+                }, request.Token).ConfigureAwait(false);
+                if (disposed || request.IsCancellationRequested || snapshot != buffer.CurrentSnapshot ||
+                    !ShaderEditorBufferState.UriEquals(uri, document.DocumentUri))
+                {
                     return null;
                 }
+
+                DefinitionLocation target = DefinitionLocation.Read(result).FirstOrDefault();
+                if (target == null)
+                {
+                    return null;
+                }
+
+                SnapshotSpan symbolSpan = triggerSpan;
+                if (LspTextRange.TryParse(target.OriginRange, out LspTextRange origin) &&
+                    origin.TryGetSpan(snapshot, out Span span) && span.Contains(triggerSpan.Start.Position))
+                {
+                    symbolSpan = new SnapshotSpan(snapshot, span);
+                }
+                else
+                {
+                    TextExtent word = navigator.GetExtentOfWord(triggerSpan.Start);
+                    if (word.IsSignificant)
+                    {
+                        symbolSpan = word.Span;
+                    }
+                }
+                return new ShaderNavigableSymbol(symbolSpan, target, () =>
+                    !disposed && snapshot == buffer.CurrentSnapshot && ShaderEditorBufferState.UriEquals(uri, document.DocumentUri));
+            }
+            catch (OperationCanceledException) { return null; }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or
+                StreamJsonRpc.RemoteInvocationException or StreamJsonRpc.ConnectionLostException)
+            {
+                // Navigation is queried while Ctrl is held, including during LSP startup/restarts.
+                return null;
             }
         }
 
@@ -115,10 +130,17 @@ namespace ShaderTools.VisualStudio.Editor
 
         public void Navigate(INavigableRelationship relationship)
         {
-            if (relationship?.Name != PredefinedNavigableRelationships.Definition.Name || !isCurrent()) return;
+            if (relationship?.Name != PredefinedNavigableRelationships.Definition.Name || !isCurrent())
+            {
+                return;
+            }
+
             BackgroundWork.Run(async () =>
             {
-                if (isCurrent()) await WorkspaceContext.OpenFileAsync(target.FilePath, target.Line, target.Character);
+                if (isCurrent())
+                {
+                    await WorkspaceContext.OpenFileAsync(target.FilePath, target.Line, target.Character);
+                }
             }, "ShaderTools/Navigate");
         }
     }

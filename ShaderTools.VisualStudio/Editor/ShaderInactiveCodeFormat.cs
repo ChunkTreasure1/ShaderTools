@@ -1,6 +1,6 @@
-using System.ComponentModel.Composition;
 using Microsoft.VisualStudio.Text.Classification;
 using Microsoft.VisualStudio.Utilities;
+using System.ComponentModel.Composition;
 
 namespace ShaderTools.VisualStudio.Editor
 {
