@@ -1,0 +1,36 @@
+[
+  {
+    "name": "Triangle vertex",
+    "file": "shaders/triangle.vert",
+    "entryPoint": "main",
+    "stage": "vertex",
+    "defines": {},
+    "includes": ["include"]
+  },
+  {
+    "name": "Triangle fragment",
+    "file": "shaders/triangle.frag",
+    "entryPoint": "main",
+    "stage": "fragment",
+    "defines": {
+      "USE_WARM_TINT": "1"
+    },
+    "includes": ["include"]
+  },
+  {
+    "name": "HLSL vertex",
+    "file": "shaders/triangle.vs.hlsl",
+    "entryPoint": "main",
+    "stage": "vertex",
+    "defines": {},
+    "includes": ["include"]
+  },
+  {
+    "name": "HLSL pixel",
+    "file": "shaders/triangle.ps.hlsl",
+    "entryPoint": "main",
+    "stage": "fragment",
+    "defines": {},
+    "includes": ["include"]
+  }
+]

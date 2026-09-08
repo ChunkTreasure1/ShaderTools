@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.shadertools.dev/shader-validator-variants.schema.json",
+  "title": "shader-validator variant database",
+  "description": "Read-only import format used by the shader-validator VS Code extension.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["uri", "variants"],
+    "properties": {
+      "uri": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Shader path or local file URI. Relative paths use the workspace root."
+      },
+      "variants": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "stage", "defines", "includes"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Both the variant display name and shader entry point."
+            },
+            "stage": {
+              "type": ["string", "null"],
+              "enum": [
+                null, "vertex", "fragment", "compute", "tesselationControl",
+                "tesselationEvaluation", "mesh", "task", "geometry", "rayGeneration",
+                "closestHit", "anyHit", "callable", "miss", "intersect"
+              ]
+            },
+            "defines": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "includes": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

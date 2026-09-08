@@ -1,0 +1,20 @@
+{
+  "$schema": "../../schemas/shadertools.schema.json",
+  "includes": [
+    "include"
+  ],
+  "defines": {
+    "EXAMPLE_TINT": "1"
+  },
+  "validate": true,
+  "symbols": true,
+  "severity": "info",
+  "glsl": {
+    "targetClient": "Vulkan1_3",
+    "spirvVersion": "SPIRV1_6"
+  },
+  "hlsl": {
+    "shaderModel": "ShaderModel6_8",
+    "version": "V2021"
+  }
+}

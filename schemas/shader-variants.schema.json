@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.shadertools.dev/shader-variants.schema.json",
+  "title": "Shader Tools variant catalog",
+  "description": "Named shader compilation contexts selectable in Visual Studio.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "file", "entryPoint"],
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Display name. Names must be unique for each shader file."
+      },
+      "file": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Shader file. Relative paths are resolved from the workspace root."
+      },
+      "entryPoint": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Function compiled as the shader entry point."
+      },
+      "stage": {
+        "$ref": "#/$defs/stage"
+      },
+      "defines": {
+        "type": "object",
+        "description": "Preprocessor symbols used for this variant.",
+        "additionalProperties": { "type": "string" },
+        "default": {}
+      },
+      "includes": {
+        "type": "array",
+        "description": "Additional include directories, resolved from the workspace root.",
+        "items": { "type": "string" },
+        "default": []
+      }
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": ["string", "null"],
+      "description": "Shader stage. Use auto or null to let the language server infer it from the filename.",
+      "enum": [
+        "auto", null, "vertex", "fragment", "compute", "tesselationControl",
+        "tesselationEvaluation", "mesh", "task", "geometry", "rayGeneration",
+        "closestHit", "anyHit", "callable", "miss", "intersect"
+      ],
+      "default": "auto"
+    }
+  }
+}

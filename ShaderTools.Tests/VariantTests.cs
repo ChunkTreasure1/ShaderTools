@@ -141,6 +141,21 @@ public sealed class VariantTests : IDisposable
     }
 
     [Fact]
+    public void ExampleWorkspaceConfigurationAndVariantsLoadTogether()
+    {
+        var workspace = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "examples", "BasicShaders"));
+
+        var configuration = ShaderConfiguration.Load(workspace);
+        var variants = VariantCatalog.Load(Path.Combine(workspace, ".shader-variants.json"), workspace);
+
+        Assert.Equal(Path.Combine(workspace, "include"), Assert.Single(configuration.Settings["includes"]!.Values<string>()));
+        Assert.Equal(4, variants.Count);
+        Assert.Equal(2, variants.Count(variant => variant.ToProtocol().Value<string>("shadingLanguage") == "Glsl"));
+        Assert.Equal(2, variants.Count(variant => variant.ToProtocol().Value<string>("shadingLanguage") == "Hlsl"));
+        Assert.All(variants, variant => Assert.True(File.Exists(variant.FilePath), variant.FilePath));
+    }
+
+    [Fact]
     public void DuplicateNamesForSameFileAreRejected()
     {
         var path = Path.Combine(_root, ".shader-variants.json");

@@ -1,0 +1,7 @@
+{
+  "root": true,
+  "hlsl.additionalIncludeDirectories": ["include"],
+  "hlsl.preprocessorDefinitions": {
+    "EXAMPLE_TINT": "1"
+  }
+}

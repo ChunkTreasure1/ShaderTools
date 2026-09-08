@@ -1,0 +1,4 @@
+{
+  "$schema": "../../schemas/shadertools.schema.json",
+  "glsl": { "targetClient": "None", "spirvVersion": "None" }
+}
