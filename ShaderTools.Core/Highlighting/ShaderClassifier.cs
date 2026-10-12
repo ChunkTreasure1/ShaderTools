@@ -51,6 +51,7 @@ public static class ShaderClassifier
         Block,
         Structure,
         Interface,
+        Namespace,
     }
 
     private sealed class Token
@@ -400,12 +401,20 @@ public static class ShaderClassifier
             "accelerationStructureEXT", "rayQueryEXT",
         };
 
+        // HLSL with 16-bit types and GLSL's explicit arithmetic types extension.
+        private static readonly HashSet<string> ExplicitWidthScalarTypes = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t",
+            "float16_t", "float32_t", "float64_t",
+        };
+
         private static readonly HashSet<string> ExactHlslTypes = new HashSet<string>(StringComparer.Ordinal)
         {
             "matrix", "vector", "SamplerState", "SamplerComparisonState", "Buffer", "RWBuffer", "ByteAddressBuffer", "RWByteAddressBuffer",
             "StructuredBuffer", "RWStructuredBuffer", "AppendStructuredBuffer", "ConsumeStructuredBuffer", "ConstantBuffer", "Texture1D",
             "Texture1DArray", "Texture2D", "Texture2DArray", "Texture2DMS", "Texture2DMSArray", "Texture3D", "TextureCube",
             "TextureCubeArray", "RWTexture1D", "RWTexture1DArray", "RWTexture2D", "RWTexture2DArray", "RWTexture3D", "RaytracingAccelerationStructure",
+            "int8_t4_packed", "uint8_t4_packed",
         };
 
         private readonly List<Token> tokens;
@@ -435,6 +444,7 @@ public static class ShaderClassifier
             ClassifyLayoutQualifiers();
             BuildLoopScopes();
             ClassifyPreprocessor();
+            IdentifyNamespaces();
             IdentifyAggregateScopes();
             IdentifyFunctions();
             IdentifyVariables();
@@ -710,6 +720,48 @@ public static class ShaderClassifier
             }
         }
 
+        // namespace A::B { ... }, using namespace A; and namespace Alias = A::B;
+        private void IdentifyNamespaces()
+        {
+            for (int index = 0; index < tokens.Count; index++)
+            {
+                CheckCancellation(index);
+                if (tokens[index].IsPreprocessor || tokens[index].Text != "namespace")
+                {
+                    continue;
+                }
+
+                int next = MarkQualifiedNamespace(NextSignificant(index + 1));
+                if (next >= 0 && tokens[next].Text == "=")
+                {
+                    next = MarkQualifiedNamespace(NextSignificant(next + 1));
+                }
+
+                if (next >= 0 && scopesByOpen.TryGetValue(next, out Scope? scope))
+                {
+                    scope.Kind = ScopeKind.Namespace;
+                }
+            }
+        }
+
+        // Marks each name in A::B::C and returns the token after the last name.
+        private int MarkQualifiedNamespace(int index)
+        {
+            while (index >= 0 && tokens[index].LexicalKind == LexicalKind.Identifier && !tokens[index].Kind.HasValue)
+            {
+                tokens[index].Kind = ShaderTokenKind.Namespace;
+                int next = NextSignificant(index + 1);
+                if (!IsScopeOperatorStart(next))
+                {
+                    return next;
+                }
+
+                index = NextSignificant(next + 2);
+            }
+
+            return index;
+        }
+
         private void IdentifyAggregateScopes()
         {
             foreach (KeyValuePair<int, Scope> pair in scopesByOpen)
@@ -885,7 +937,11 @@ public static class ShaderClassifier
             for (int index = start; index < end; index++)
             {
                 CheckCancellation(index);
-                if (tokens[index].Text == ":")
+                if (IsScopeOperatorStart(index))
+                {
+                    index++;
+                }
+                else if (tokens[index].Text == ":")
                 {
                     colon = index;
                     break;
@@ -1105,6 +1161,18 @@ public static class ShaderClassifier
                 {
                     token.Kind = ShaderTokenKind.Type;
                 }
+                else if (IsScopeOperatorStart(NextSignificant(index + 1)))
+                {
+                    // Types are handled above, so the remaining qualifiers are
+                    // namespaces, including ones declared in included files.
+                    token.Kind = ShaderTokenKind.Namespace;
+                }
+                else if (IsPrecededByScopeOperator(index))
+                {
+                    Symbol? symbol = FindNamespaceSymbol(token.Text);
+                    token.Kind = symbol?.Kind ?? (functions.Contains(token.Text) || IsFollowedByOpenParenthesis(index)
+                        ? ShaderTokenKind.Function : ShaderTokenKind.Identifier);
+                }
                 else if (IsPrecededByDot(index))
                 {
                     token.Kind = IsFollowedByOpenParenthesis(index) ? ShaderTokenKind.Function : ShaderTokenKind.Field;
@@ -1137,7 +1205,7 @@ public static class ShaderClassifier
                         continue;
                     }
 
-                    if (current.Kind != ScopeKind.Root && symbol.DeclarationIndex > useIndex)
+                    if (current.Kind is not ScopeKind.Root and not ScopeKind.Namespace && symbol.DeclarationIndex > useIndex)
                     {
                         continue;
                     }
@@ -1151,6 +1219,22 @@ public static class ShaderClassifier
                 if (best != null)
                 {
                     return best;
+                }
+            }
+
+            return null;
+        }
+
+        private Symbol? FindNamespaceSymbol(string name)
+        {
+            if (symbolsByName.TryGetValue(name, out List<Symbol>? declarations))
+            {
+                foreach (Symbol symbol in declarations)
+                {
+                    if (symbol.Scope.Kind is ScopeKind.Root or ScopeKind.Namespace)
+                    {
+                        return symbol;
+                    }
                 }
             }
 
@@ -1199,12 +1283,12 @@ public static class ShaderClassifier
                 return ShaderTokenKind.Field;
             }
 
-            return scope.Kind == ScopeKind.Root ? ShaderTokenKind.GlobalVariable : ShaderTokenKind.LocalVariable;
+            return scope.Kind is ScopeKind.Root or ScopeKind.Namespace ? ShaderTokenKind.GlobalVariable : ShaderTokenKind.LocalVariable;
         }
 
         private bool IsBuiltInType(string value)
         {
-            if (ExactGlslTypes.Contains(value) || IsGlslResourceType(value))
+            if (ExactGlslTypes.Contains(value) || ExplicitWidthScalarTypes.Contains(value) || IsGlslResourceType(value))
             {
                 return true;
             }
@@ -1219,7 +1303,7 @@ public static class ShaderClassifier
 
         private static bool IsGlslVectorOrMatrix(string value)
         {
-            foreach (string? prefix in new[] { "vec", "dvec", "bvec", "ivec", "uvec" })
+            foreach (string? prefix in new[] { "vec", "dvec", "bvec", "ivec", "uvec", "i8vec", "u8vec", "i16vec", "u16vec", "i32vec", "u32vec", "i64vec", "u64vec", "f16vec", "f32vec", "f64vec" })
             {
                 if (value.StartsWith(prefix, StringComparison.Ordinal))
                 {
@@ -1227,7 +1311,7 @@ public static class ShaderClassifier
                 }
             }
 
-            foreach (string? prefix in new[] { "mat", "dmat" })
+            foreach (string? prefix in new[] { "mat", "dmat", "f16mat", "f32mat", "f64mat" })
             {
                 if (value.StartsWith(prefix, StringComparison.Ordinal))
                 {
@@ -1240,15 +1324,20 @@ public static class ShaderClassifier
 
         private static bool IsHlslVectorOrMatrix(string value)
         {
-            string[] prefixes = new[] { "bool", "int", "uint", "dword", "half", "float", "double", "min16float", "min10float", "min16int", "min12int", "min16uint" };
+            string[] prefixes = new[]
+            {
+                "bool", "int", "uint", "dword", "half", "float", "double", "min16float", "min10float", "min16int", "min12int", "min16uint",
+                "int16_t", "uint16_t", "int32_t", "uint32_t", "int64_t", "uint64_t", "float16_t", "float32_t", "float64_t",
+            };
             foreach (string? prefix in prefixes)
             {
-                if (!value.StartsWith(prefix, StringComparison.Ordinal) || value.Length == prefix.Length)
+                // Several prefixes overlap (int and int16_t), so keep looking
+                // until one leaves a valid dimension suffix.
+                if (value.Length > prefix.Length && value.StartsWith(prefix, StringComparison.Ordinal) &&
+                    IsDimensionSuffix(value, prefix.Length, '1'))
                 {
-                    continue;
+                    return true;
                 }
-
-                return IsDimensionSuffix(value, prefix.Length, '1');
             }
 
             return false;
@@ -1293,6 +1382,19 @@ public static class ShaderClassifier
         {
             int previous = PreviousSignificant(index - 1);
             return previous >= 0 && tokens[previous].Text == ".";
+        }
+
+        // The lexer emits "::" as two adjacent ":" tokens.
+        private bool IsScopeOperatorStart(int index)
+        {
+            return index >= 0 && index + 1 < tokens.Count && tokens[index].Text == ":" &&
+                tokens[index + 1].Text == ":" && tokens[index + 1].Start == tokens[index].Start + 1;
+        }
+
+        private bool IsPrecededByScopeOperator(int index)
+        {
+            int previous = PreviousSignificant(index - 1);
+            return previous >= 1 && IsScopeOperatorStart(previous - 1);
         }
 
         private bool IsFollowedByOpenParenthesis(int index)

@@ -37,6 +37,8 @@ namespace ShaderTools.VisualStudio.Options
         public bool FadeInactiveCode { get; set; } = true;
         [Category("Editor"), DisplayName("Use C++ colors for shaders"), Description("Use Visual Assist colors when available, otherwise the current theme's C++ colors, for GLSL/HLSL declarations and references. Turn off to use TextMate colors."), DefaultValue(true)]
         public bool UseCppColors { get; set; } = true;
+        [Category("Integration"), DisplayName("Enable Visual Assist in shader files"), Description("Add the Shader Tools GLSL and HLSL file types to Visual Assist's custom content types so Visual Assist works alongside Shader Tools. Turning this off removes them again. Restart Visual Studio after changing this."), DefaultValue(false)]
+        public bool EnableVisualAssist { get; set; }
         [Category("Analysis"), DisplayName("Compiler diagnostics"), DefaultValue(true)]
         public bool Validate { get; set; } = true;
         [Category("Analysis"), DisplayName("Discover include context automatically"), DefaultValue(true)]
@@ -54,9 +56,12 @@ namespace ShaderTools.VisualStudio.Options
         [Category("Tools"), DisplayName("clang-format directory"), Description("Optional directory containing clang-format.exe. Empty searches PATH and this Visual Studio's LLVM tools. Restart the server after changing this.")]
         public string FormatDirectory { get; set; } = "";
 
+        private bool savedEnableVisualAssist;
+
         public override void LoadSettingsFromStorage()
         {
             base.LoadSettingsFromStorage();
+            savedEnableVisualAssist = EnableVisualAssist;
             current = this;
         }
 
@@ -71,6 +76,13 @@ namespace ShaderTools.VisualStudio.Options
             }
             base.OnApply(e);
             current = this;
+            // Only remove entries after this option is turned off, so entries
+            // added by hand are left alone while the option stays off.
+            if ((EnableVisualAssist || savedEnableVisualAssist) && Services.VisualAssistIntegration.Apply(EnableVisualAssist))
+            {
+                _=System.Windows.Forms.MessageBox.Show("Restart Visual Studio for Visual Assist to pick up the change.", "Shader Tools");
+            }
+            savedEnableVisualAssist = EnableVisualAssist;
             SaveSnapshot();
             Changed?.Invoke(this, EventArgs.Empty);
         }
@@ -99,6 +111,7 @@ namespace ShaderTools.VisualStudio.Options
                 ["formatOnSave"] = FormatOnSave,
                 ["fadeInactiveCode"] = FadeInactiveCode,
                 ["useCppColors"] = UseCppColors,
+                ["enableVisualAssist"] = EnableVisualAssist,
                 ["validate"] = Validate,
                 ["automaticVariantDiscovery"] = AutomaticVariantDiscovery,
                 ["targetClient"] = TargetClient.ToString(),
@@ -152,6 +165,7 @@ namespace ShaderTools.VisualStudio.Options
                 result.FormatOnSave = (bool?)prefs["formatOnSave"] ?? true;
                 result.FadeInactiveCode = (bool?)prefs["fadeInactiveCode"] ?? true;
                 result.UseCppColors = (bool?)prefs["useCppColors"] ?? true;
+                result.EnableVisualAssist = (bool?)prefs["enableVisualAssist"] ?? false;
                 result.Validate = (bool?)prefs["validate"] ?? true;
                 result.AutomaticVariantDiscovery = (bool?)prefs["automaticVariantDiscovery"] ?? true;
                 if (Enum.TryParse((string)prefs["targetClient"], out GlslTarget target))

@@ -17,4 +17,5 @@ public enum ShaderTokenKind
     Comment,
     PreprocessorKeyword,
     Semantic,
+    Namespace,
 }

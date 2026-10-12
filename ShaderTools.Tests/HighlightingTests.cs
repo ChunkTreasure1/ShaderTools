@@ -266,6 +266,56 @@ public sealed class HighlightingTests
     }
 
     [Fact]
+    public void HlslNamespacesAreClassifiedInDeclarationsAndQualifiedNames()
+    {
+        const string shader = """
+            namespace Lighting::Detail { static const float Scale = 2.; struct Light { float3 color; }; float Attenuate(float d) { return d * Scale; } }
+            namespace Lighting { float Ambient; }
+            using namespace Lighting;
+            namespace L = Lighting::Detail;
+            float4 main(Lighting::Detail::Light light : TEXCOORD0) : SV_Target
+            {
+                float a = Lighting::Ambient + Lighting::Detail::Scale + External::Value;
+                return float4(light.color * Lighting::Detail::Attenuate(a), 1.);
+            }
+            """;
+
+        var tokens = Classified(shader, hlsl: true);
+
+        AssertKinds(tokens, "Lighting", Enumerable.Repeat(ShaderTokenKind.Namespace, 8).ToArray());
+        AssertKinds(tokens, "Detail", Enumerable.Repeat(ShaderTokenKind.Namespace, 5).ToArray());
+        AssertKinds(tokens, "L", ShaderTokenKind.Namespace);
+        AssertKinds(tokens, "External", ShaderTokenKind.Namespace);
+        AssertKinds(tokens, "Light", ShaderTokenKind.Type, ShaderTokenKind.Type);
+        AssertKinds(tokens, "light", ShaderTokenKind.Parameter, ShaderTokenKind.Parameter);
+        AssertKinds(tokens, "TEXCOORD0", ShaderTokenKind.Semantic);
+        AssertKinds(tokens, "Scale", ShaderTokenKind.GlobalVariable, ShaderTokenKind.GlobalVariable, ShaderTokenKind.GlobalVariable);
+        AssertKinds(tokens, "Ambient", ShaderTokenKind.GlobalVariable, ShaderTokenKind.GlobalVariable);
+        AssertKinds(tokens, "Attenuate", ShaderTokenKind.Function, ShaderTokenKind.Function);
+        AssertKinds(tokens, "a", ShaderTokenKind.LocalVariable, ShaderTokenKind.LocalVariable);
+    }
+
+    [Theory]
+    [InlineData(true, "uint32_t", "int16_t", "float16_t", "uint64_t", "uint32_t4", "int16_t2", "float16_t3x3", "uint8_t4_packed")]
+    [InlineData(false, "uint32_t", "int8_t", "float64_t", "u8vec4", "i16vec2", "u32vec3", "f16vec4", "f32mat3", "f64mat2x4")]
+    public void ExplicitWidthTypesAreTypes(bool hlsl, params string[] types)
+    {
+        string shader = string.Concat(types.Select((type, index) => $"{type} value{index};"));
+
+        var tokens = Classified(shader, hlsl);
+
+        foreach (string type in types)
+        {
+            AssertKinds(tokens, type, ShaderTokenKind.Type);
+        }
+
+        for (int index = 0; index < types.Length; index++)
+        {
+            AssertKinds(tokens, "value" + index, ShaderTokenKind.GlobalVariable);
+        }
+    }
+
+    [Fact]
     public void LocalVariablesCanShadowFunctionNames()
     {
         const string shader = "float light(){return 1.;} void main(){float light=1.;float x=light;}";

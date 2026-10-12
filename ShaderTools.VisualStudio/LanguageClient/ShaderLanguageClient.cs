@@ -94,6 +94,11 @@ namespace ShaderTools.VisualStudio.LanguageClient
             if (!loaded)
             {
                 ShaderOptions.Changed += OnOptionsChanged;
+                if (ShaderOptions.Current.EnableVisualAssist)
+                {
+                    // Restore the entries if Visual Assist settings were reset.
+                    _=VisualAssistIntegration.Apply(true);
+                }
                 workspaceMonitor = new WorkspaceMonitor(OnWorkspaceChanged);
                 await workspaceMonitor.InitializeAsync();
                 loaded = true;

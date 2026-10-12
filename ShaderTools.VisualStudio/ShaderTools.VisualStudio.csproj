@@ -71,6 +71,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\BackgroundWork.cs" />
     <Compile Include="Services\ShaderOutput.cs" />
+    <Compile Include="Services\VisualAssistIntegration.cs" />
     <Compile Include="Services\WorkspaceContext.cs" />
     <Compile Include="Services\WorkspaceMonitor.cs" />
     <Compile Include="ToolWindows\ShaderToolsControl.cs" />

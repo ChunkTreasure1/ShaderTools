@@ -198,6 +198,7 @@ namespace ShaderTools.VisualStudio.Editor
             {
                 case ShaderTokenKind.Function: yield return "vax_type_method"; yield return "cppFunction"; yield return "method name"; break;
                 case ShaderTokenKind.Type: yield return "vax_type_class"; yield return "cppType"; yield return "class name"; break;
+                case ShaderTokenKind.Namespace: yield return "vax_type_namespace"; yield return "cppNamespace"; yield return "namespace name"; break;
                 case ShaderTokenKind.GlobalVariable: yield return "vax_type_var"; yield return "cppGlobalVariable"; yield return "field name"; break;
                 case ShaderTokenKind.LocalVariable: yield return "vax_type_var"; yield return "cppLocalVariable"; yield return "local name"; break;
                 case ShaderTokenKind.Parameter: yield return "vax_type_var"; yield return "cppParameter"; yield return "parameter name"; break;
